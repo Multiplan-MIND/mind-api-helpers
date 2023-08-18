@@ -1,5 +1,6 @@
 import { transports, format } from 'winston';
 import { WinstonModule } from 'nest-winston';
+import { LoggerService } from '@nestjs/common';
 
 const formatMeta = (meta) => {
   const splat = meta[Symbol.for('splat')];
@@ -21,7 +22,7 @@ const mtsLoggerFormat = format.printf(
   },
 );
 
-export const MindLoggerFactory = (module: string) => {
+export const MindLoggerFactory = (module: string): LoggerService => {
   const consoleFormat = format.combine(
     format.timestamp(),
     format.ms(),
