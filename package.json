@@ -14,6 +14,7 @@
     "test": "jest",
     "prebuild": "rimraf dist/*",
     "build": "tsc",
+    "preinstall": "yarn --ignore-scripts",
     "postinstall": "yarn build"
   },
   "dependencies": {},
