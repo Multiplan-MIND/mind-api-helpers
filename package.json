@@ -13,7 +13,8 @@
     "lint": "eslint src/**/*.ts --ignore-pattern src/**/*.spec.ts",
     "test": "jest",
     "prebuild": "rimraf dist/*",
-    "build": "tsc"
+    "build": "tsc",
+    "postinstall": "yarn build"
   },
   "dependencies": {},
   "devDependencies": {
