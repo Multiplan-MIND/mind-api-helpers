@@ -17,11 +17,11 @@
     "preinstall": "yarn --ignore-scripts",
     "postinstall": "yarn build"
   },
-  "dependencies": {
-  },
+  "dependencies": {},
   "devDependencies": {
     "@nestjs/common": "10.1.3",
     "@nestjs/core": "10.1.3",
+    "@nestjs/graphql": "12.0.8",
     "@nestjs/platform-express": "10.1.3",
     "@nestjs/testing": "10.1.3",
     "@types/jest": "29.5.3",
