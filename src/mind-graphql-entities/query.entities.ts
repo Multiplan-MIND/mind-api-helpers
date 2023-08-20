@@ -32,3 +32,30 @@ export class FieldFilterInput {
   @Field(() => [Boolean], { nullable: true })
   boolValues: boolean[];
 }
+
+export enum SortEnum {
+  ASC = 1,
+  DESC = -1,
+}
+registerEnumType(SortEnum, { name: 'SortEnum' });
+
+@InputType()
+export class Sort {
+  @Field({ nullable: false })
+  field: string;
+
+  @Field({ nullable: false })
+  sort: SortEnum;
+}
+
+@InputType()
+export class QueryOptionsInput {
+  @Field({ nullable: true, defaultValue: 10 })
+  limit?: number;
+
+  @Field({ nullable: true, defaultValue: 0 })
+  skip?: number;
+
+  @Field(() => Sort, { nullable: true, defaultValue: [{ updatedAt: -1 }] })
+  sort?: Sort[];
+}
