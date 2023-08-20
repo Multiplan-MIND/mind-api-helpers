@@ -41,6 +41,11 @@ registerEnumType(SortEnum, { name: 'SortEnum' });
 
 @InputType()
 export class Sort {
+  constructor (field: string, sort: SortEnum) {
+    this.field = field;
+    this.sort = sort;
+  }
+
   @Field({ nullable: false })
   field: string;
 
@@ -56,6 +61,6 @@ export class QueryOptionsInput {
   @Field({ nullable: true, defaultValue: 0 })
   skip?: number;
 
-  @Field(() => Sort, { nullable: true, defaultValue: [{ updatedAt: SortEnum.DESC }] })
+  @Field(() => Sort, { nullable: true, defaultValue: [new Sort('updatedAt', SortEnum.DESC)] })
   sort?: Sort[];
 }
