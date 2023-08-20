@@ -21,14 +21,14 @@ export class FieldFilterInput {
   operation: OperationEnum;
 
   @Field(() => [String], { nullable: true })
-  stringValues: [string];
+  stringValues: string[];
 
   @Field(() => [Int], { nullable: true })
-  intValues: [number];
+  intValues: number[];
 
   @Field(() => [Date], { nullable: true })
-  dateValues: [Date];
+  dateValues: Date[];
 
   @Field(() => [Boolean], { nullable: true })
-  boolValues: [boolean];
+  boolValues: boolean[];
 }

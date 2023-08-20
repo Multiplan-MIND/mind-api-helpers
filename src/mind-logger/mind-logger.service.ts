@@ -7,7 +7,7 @@ import { MindLoggerFactory } from './mind-logger.factory';
 export class MindLoggerService {
   private module?: string;
   private method?: string;
-  private infos?: [string];
+  private infos?: string[];
 
   private loggerService?: LoggerService;
 
@@ -37,7 +37,7 @@ export class MindLoggerService {
     this.loggerService.debug('Fabricated Logger', this.prefix);
   }
 
-  setMethod(method: string, infos?: [string]) {
+  setMethod(method: string, infos?: string[]) {
     this.method = method;
     this.infos = infos;
     this.prefix = `${process.pid}|${this.module}|${this.method}`;
