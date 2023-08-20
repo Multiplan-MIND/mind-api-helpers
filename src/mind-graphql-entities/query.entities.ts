@@ -61,6 +61,6 @@ export class QueryOptionsInput {
   @Field({ nullable: true, defaultValue: 0 })
   skip?: number;
 
-  @Field(() => Sort, { nullable: true, defaultValue: [new Sort('updatedAt', SortEnum.DESC)] })
+  @Field(() => [Sort], { nullable: true, defaultValue: [new Sort('updatedAt', SortEnum.DESC)] })
   sort?: Sort[];
 }
