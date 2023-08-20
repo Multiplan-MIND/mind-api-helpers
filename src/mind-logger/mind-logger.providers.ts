@@ -17,8 +17,6 @@ function createMindLoggerProvider(module: string): Provider<MindLoggerService> {
   };
 }
 
-export function createMindLoggerProviders(): Array<
-  Provider<MindLoggerService>
-> {
+export function createMindLoggerProviders(): Array<Provider<MindLoggerService>> {
   return modulesForLoggers.map((prefix) => createMindLoggerProvider(prefix));
 }

@@ -1,8 +1,9 @@
 import { Injectable, LoggerService, Scope } from '@nestjs/common';
 import { MindLoggerFactory } from './mind-logger.factory';
+import { jsonError } from '../mind-helpers/error.helper';
 
 @Injectable({
-  scope: Scope.TRANSIENT
+  scope: Scope.TRANSIENT,
 })
 export class MindLoggerService {
   private module?: string;
@@ -16,8 +17,9 @@ export class MindLoggerService {
   info(message: string) {
     this.loggerService?.log(message, this.prefix);
   }
-  error(message: string, stack?: string) {
-    this.loggerService?.error(message, stack, this.prefix);
+  error(message: string, err?: Error) {
+    message += ` | ${err && JSON.stringify(jsonError(err))}`;
+    this.loggerService?.error(message, err?.stack, this.prefix);
   }
   warn(message: string) {
     this.loggerService?.warn(message, this.prefix);
@@ -42,6 +44,7 @@ export class MindLoggerService {
     this.infos = infos;
     this.prefix = `${process.pid}|${this.module}|${this.method}`;
     if (this.infos) {
-      this.prefix = `${this.prefix}#${this.infos.toString()}`;}
+      this.prefix = `${this.prefix}#${this.infos.toString()}`;
+    }
   }
 }

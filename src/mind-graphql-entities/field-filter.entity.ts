@@ -1,4 +1,4 @@
-import { Field,registerEnumType, InputType, Int} from '@nestjs/graphql';
+import { Field, registerEnumType, InputType, Int } from '@nestjs/graphql';
 
 export enum OperationEnum {
   eq,

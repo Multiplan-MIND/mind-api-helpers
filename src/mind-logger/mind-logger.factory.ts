@@ -14,13 +14,9 @@ const formatMeta = (meta) => {
   return '';
 };
 
-const mtsLoggerFormat = format.printf(
-  ({ context, level, message, timestamp, ms, ...meta }) => {
-    return `${timestamp} [${context}] ${level}: ${message} | ${
-      meta && formatMeta(meta)
-    } | ${ms}`;
-  },
-);
+const mtsLoggerFormat = format.printf(({ context, level, message, timestamp, ms, ...meta }) => {
+  return `${timestamp} [${context}] ${level}: ${message} | ${meta && formatMeta(meta)} | ${ms}`;
+});
 
 export const MindLoggerFactory = (module: string): LoggerService => {
   const consoleFormat = format.combine(
@@ -30,11 +26,7 @@ export const MindLoggerFactory = (module: string): LoggerService => {
     format.prettyPrint(),
     mtsLoggerFormat,
   );
-  const fileFormat = format.combine(
-    format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-    format.ms(),
-    mtsLoggerFormat,
-  );
+  const fileFormat = format.combine(format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }), format.ms(), mtsLoggerFormat);
 
   return WinstonModule.createLogger({
     level: process.env.DEBUG ? 'debug' : 'info',
