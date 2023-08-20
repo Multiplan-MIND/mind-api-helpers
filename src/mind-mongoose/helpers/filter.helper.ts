@@ -1,4 +1,4 @@
-import { FieldFilterInput, OperationEnum } from '../../mind-graphql-entities/field-filter.entity';
+import { FieldFilterInput, OperationEnum } from '../../mind-graphql-entities/query.entities';
 
 export function getQuery(filters: FieldFilterInput[]) {
   const query = {};
