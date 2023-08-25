@@ -21,16 +21,16 @@ export class FieldFilterInput {
   operation: OperationEnum;
 
   @Field(() => [String], { nullable: true })
-  stringValues: string[];
+  stringValues?: string[];
 
   @Field(() => [Int], { nullable: true })
-  intValues: number[];
+  intValues?: number[];
 
   @Field(() => [Date], { nullable: true })
-  dateValues: Date[];
+  dateValues?: Date[];
 
   @Field(() => [Boolean], { nullable: true })
-  boolValues: boolean[];
+  boolValues?: boolean[];
 }
 
 export enum SortEnum {
@@ -41,7 +41,7 @@ registerEnumType(SortEnum, { name: 'SortEnum' });
 
 @InputType()
 export class Sort {
-  constructor (field: string, sort: SortEnum) {
+  constructor(field: string, sort: SortEnum) {
     this.field = field;
     this.sort = sort;
   }
