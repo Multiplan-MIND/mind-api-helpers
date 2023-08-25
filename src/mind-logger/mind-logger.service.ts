@@ -44,7 +44,11 @@ export class MindLoggerService {
     this.infos = infos;
     this.prefix = `${process.pid}|${this.module}|${this.method}`;
     if (this.infos) {
-      this.prefix = `${this.prefix}#${this.infos.toString()}`;
+      this.prefix += '#';
+      for (let i = 0; i < this.infos.length; i++) {
+        this.prefix += this.infos[i];
+        if (i + 1 != this.infos.length) this.prefix += ';';
+      }
     }
   }
 }
