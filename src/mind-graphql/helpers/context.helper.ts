@@ -1,6 +1,6 @@
 import { MindLoggerFactory } from '../../mind-logger/mind-logger.factory';
 
-export const handleContext = (req: Request) => {
+export const handleContext = (req) => {
   const logger = MindLoggerFactory('GraphQLModuleContext');
   const ctx = { mindUserId: null, mindUserRoles: null, mindSessionExpiresIn: null };
   try {
