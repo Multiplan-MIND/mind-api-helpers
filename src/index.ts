@@ -1,4 +1,5 @@
-export * from './mind-graphql-entities/query.entities';
+export * from './mind-graphql/entities/query.entities';
+export * from './mind-graphql/helpers/context.helper';
 export * from './mind-helpers/error.helper';
 export * from './mind-logger/mind-logger.decorator';
 export * from './mind-logger/mind-logger.factory';
