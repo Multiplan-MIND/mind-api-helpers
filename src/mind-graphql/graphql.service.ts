@@ -5,8 +5,8 @@ import { Redis } from 'ioredis';
 import { ApolloServerPluginLandingPageLocalDefault } from '@apollo/server/plugin/landingPage/default';
 import GraphQLJSON from 'graphql-type-json';
 
-import { MindLoggerService } from 'src/mind-logger/mind-logger.service';
-import { MindLogger } from 'src/mind-logger/mind-logger.decorator';
+import { MindLoggerService } from '../mind-logger/mind-logger.service';
+import { MindLogger } from '../mind-logger/mind-logger.decorator';
 
 @Injectable()
 export class GraphqlService implements GqlOptionsFactory<ApolloFederationDriverConfig> {
