@@ -18,7 +18,7 @@ export class MindLoggerService {
     this.loggerService?.log(message, this.prefix);
   }
   error(message: string, err?: Error) {
-    message += ` | ${err && JSON.stringify(jsonError(err))}`;
+    if (err) message += ` | ${JSON.stringify(jsonError(err))}`;
     this.loggerService?.error(message, err?.stack, this.prefix);
   }
   warn(message: string) {
