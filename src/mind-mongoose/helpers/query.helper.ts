@@ -1,4 +1,9 @@
-import { FieldFilterInput, OperationEnum } from '../../mind-graphql/entities/query.entities';
+import {
+  FieldFilterInput,
+  OperationEnum,
+  QueryOptionsInput,
+  SortEnum,
+} from '../../mind-graphql/entities/query.entities';
 
 export function getQuery(filters: FieldFilterInput[]) {
   const query = {};
@@ -44,4 +49,20 @@ export function getQuery(filters: FieldFilterInput[]) {
   }
 
   return query;
+}
+
+export function getOptions(opt: QueryOptionsInput) {
+  const options: { limit?: number; skip?: number; sort?: any } = {};
+
+  if (opt.skip) options.skip = opt.skip;
+  if (opt.limit) options.limit = opt.limit;
+
+  options.sort = [];
+  if (opt.sort) {
+    for (const s of opt.sort) {
+      options.sort.push({ [`${s.field}`]: s.sort === SortEnum.ASC ? 1 : -1 });
+    }
+  }
+
+  return options;
 }
