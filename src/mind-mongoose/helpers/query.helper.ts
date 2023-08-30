@@ -51,16 +51,21 @@ export function getQuery(filters: FieldFilterInput[]) {
   return query;
 }
 
-export function getOptions(opt: QueryOptionsInput) {
+export function getOptions(opt?: QueryOptionsInput) {
   const options: { limit?: number; skip?: number; sort?: any } = {};
 
-  if (opt.skip) options.skip = opt.skip;
-  if (opt.limit) options.limit = opt.limit;
+  if (!opt) {
+    options.skip = 0;
+    options.limit = 100;
+  } else {
+    if (opt.skip) options.skip = opt.skip;
+    if (opt.limit) options.limit = opt.limit;
 
-  options.sort = [];
-  if (opt.sort) {
-    for (const s of opt.sort) {
-      options.sort.push({ [`${s.field}`]: s.sort === SortEnum.ASC ? 1 : -1 });
+    options.sort = [];
+    if (opt.sort) {
+      for (const s of opt.sort) {
+        options.sort.push({ [`${s.field}`]: s.sort === SortEnum.ASC ? 1 : -1 });
+      }
     }
   }
 
