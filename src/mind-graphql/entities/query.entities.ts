@@ -6,6 +6,8 @@ export enum OperationEnum {
   includes,
   between,
   notBetween,
+  gte,
+  lte,
   regex,
   boolean,
   exists,
@@ -18,16 +20,28 @@ export class FieldFilterInput {
   field: string;
 
   @Field(() => OperationEnum)
-  operation: OperationEnum;
+  op: OperationEnum;
+
+  @Field(() => [String], { nullable: true })
+  stringValue?: string;
 
   @Field(() => [String], { nullable: true })
   stringValues?: string[];
 
   @Field(() => [Int], { nullable: true })
+  intValue?: number;
+
+  @Field(() => [Int], { nullable: true })
   intValues?: number[];
 
   @Field(() => [Date], { nullable: true })
+  dateValue?: Date;
+
+  @Field(() => [Date], { nullable: true })
   dateValues?: Date[];
+
+  @Field(() => [Boolean], { nullable: true })
+  boolValue?: boolean;
 
   @Field(() => [Boolean], { nullable: true })
   boolValues?: boolean[];

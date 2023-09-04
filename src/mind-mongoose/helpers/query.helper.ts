@@ -11,15 +11,19 @@ export function getQuery(filters: FieldFilterInput[]) {
     for (const filter of filters) {
       const field = filter.field;
       let values = [];
-      if (filter.stringValues) values = filter.stringValues;
+      if (filter.stringValue) values.push(filter.stringValue);
+      else if (filter.stringValues) values = filter.stringValues;
+      else if (filter.intValue) values.push(filter.intValue);
       else if (filter.intValues) values = filter.intValues;
+      else if (filter.dateValue) values.push(new Date(filter.dateValue));
       else if (filter.dateValues) {
         for (const date of filter.dateValues) {
           values.push(new Date(date));
         }
-      } else if (filter.boolValues) values = filter.boolValues;
+      } else if (filter.boolValue) values.push(filter.boolValue);
+      else if (filter.boolValues) values = filter.boolValues;
 
-      switch (filter.operation) {
+      switch (filter.op) {
         case OperationEnum.eq:
           query[field] = values[0];
           break;
@@ -34,6 +38,12 @@ export function getQuery(filters: FieldFilterInput[]) {
           break;
         case OperationEnum.notBetween:
           query[field] = { $lte: values[0], $gte: values[1] };
+          break;
+        case OperationEnum.gte:
+          query[field] = { $gte: values[0] };
+          break;
+        case OperationEnum.lte:
+          query[field] = { $lte: values[0] };
           break;
         case OperationEnum.regex:
           query[field] = { $regex: values[0], $options: 'i' };
