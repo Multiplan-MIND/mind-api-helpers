@@ -13,11 +13,11 @@ import { MindLoggerService } from '../mind-logger/mind-logger.service';
 import { MindLogger } from '../mind-logger/mind-logger.decorator';
 
 @Injectable()
-export class GraphqlService implements GqlOptionsFactory<ApolloFederationDriverConfig> {
+export class GraphqlJwksService implements GqlOptionsFactory<ApolloFederationDriverConfig> {
   private ONE_DAY = 24 * 60 * 60;
 
   constructor(
-    @MindLogger('GraphqlService') private logger: MindLoggerService,
+    @MindLogger('GraphqlJwksService') private logger: MindLoggerService,
     @Inject('REDIS_CLIENT') private readonly redis: Redis,
   ) {}
 
@@ -37,7 +37,7 @@ export class GraphqlService implements GqlOptionsFactory<ApolloFederationDriverC
 
     let publicKey = await this.redis.get('JWKS_PUBLIC_KEY');
     if (!publicKey) {
-      this.logger.debug('Loading public key');
+      this.logger.debug(`Loading public key: ${process.env.JWKS_URL}`);
       const jwksResponse = await axios.get(process.env.JWKS_URL);
       this.logger.debug('JWKS file downloaded');
 
