@@ -1,3 +1,7 @@
+import * as jwt from 'jsonwebtoken';
+import * as jwkToPem from 'jwk-to-pem';
+import axios from 'axios';
+
 import { Inject, Injectable } from '@nestjs/common';
 import { GqlOptionsFactory } from '@nestjs/graphql';
 import { ApolloFederationDriverConfig } from '@nestjs/apollo';
@@ -28,19 +32,58 @@ export class GraphqlService implements GqlOptionsFactory<ApolloFederationDriverC
     };
   }
 
-  private mindHandleContext({ req }) {
-    this.logger.setMethod('handleContext');
+  private async getPublicKey(kid) {
+    this.logger.setMethod('getPublicKey', [kid]);
+
+    let publicKey = await this.redis.get('JWKS_PUBLIC_KEY');
+    if (!publicKey) {
+      this.logger.debug('Loading public key');
+      const jwksResponse = await axios.get(process.env.JWKS_URL);
+      this.logger.debug('JWKS file downloaded');
+
+      const [firstKey] = jwksResponse.data.keys.filter((item) => item.kid === kid);
+      publicKey = jwkToPem(firstKey);
+      await this.redis.set('JWKS_PUBLIC_KEY', publicKey, 'EX', this.ONE_DAY);
+      this.logger.debug('Public Key save in redis');
+    }
+    return publicKey;
+  }
+
+  private async mindHandleContext({ req }) {
+    this.logger.setMethod('mindHandleContext');
 
     const ctx = { mindUserId: null, mindUserRoles: null, mindSessionExpiresIn: null };
     try {
-      if (req?.headers?.['mind-user-id']) {
-        ctx.mindUserId = req?.headers?.['mind-user-id'];
-        ctx.mindUserRoles = req?.headers?.['mind-user-roles'].split(',');
-        ctx.mindSessionExpiresIn = new Date(req?.headers?.['mind-session-expires-in']);
+      if (req?.headers?.authorization) {
+        const token = req?.headers?.authorization.split('Bearer ')[1];
+        if (token && token.length > 0) {
+          const decodedToken = jwt.decode(token, { complete: true });
+          if (!decodedToken) throw new Error('Error token in decoded');
+          const kid = decodedToken.header.kid;
+
+          const publicKey = await this.getPublicKey(kid);
+          try {
+            const decoded = jwt.verify(token, publicKey);
+            if (decoded.mindSessionExpiresIn) {
+              const expiresIn = new Date(decoded.mindSessionExpiresIn);
+              const now = new Date();
+              if (expiresIn.getTime() > now.getTime()) {
+                ctx.mindUserId = decoded.mindUserId;
+                ctx.mindUserRoles = decoded.mindUserRoles;
+                ctx.mindSessionExpiresIn = decoded.mindSessionExpiresIn;
+              } else {
+                this.logger.error(`Session Expired: ${expiresIn.toISOString()} x ${now.toISOString()}`);
+              }
+            }
+          } catch (e) {
+            this.logger.error(`Error setting context: ${e.message}`, e);
+            return;
+          }
+        }
       }
     } catch (e) {
       this.logger.error(`Error setting context: ${e.message}`, e);
-      return null;
+      return;
     }
     return ctx;
   }
