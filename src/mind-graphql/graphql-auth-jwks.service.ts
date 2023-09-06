@@ -13,11 +13,11 @@ import { MindLoggerService } from '../mind-logger/mind-logger.service';
 import { MindLogger } from '../mind-logger/mind-logger.decorator';
 
 @Injectable()
-export class GraphqlJwksService implements GqlOptionsFactory<ApolloFederationDriverConfig> {
+export class GraphqlAuthJwksService implements GqlOptionsFactory<ApolloFederationDriverConfig> {
   private ONE_DAY = 24 * 60 * 60;
 
   constructor(
-    @MindLogger('GraphqlJwksService') private logger: MindLoggerService,
+    @MindLogger('GraphqlAuthJwksService') private logger: MindLoggerService,
     @Inject('REDIS_CLIENT') private readonly redis: Redis,
   ) {}
 
