@@ -3,7 +3,8 @@ import { Field, registerEnumType, InputType, Int } from '@nestjs/graphql';
 export enum OperationEnum {
   eq,
   ne,
-  includes,
+  in,
+  nin,
   between,
   notBetween,
   gte,

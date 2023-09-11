@@ -34,8 +34,11 @@ export function getQuery(filters: FieldFilterInput[]) {
         case OperationEnum.ne:
           query[field] = { $ne: values[0] };
           break;
-        case OperationEnum.includes:
+        case OperationEnum.in:
           query[field] = { $in: values };
+          break;
+        case OperationEnum.nin:
+          query[field] = { $nin: values };
           break;
         case OperationEnum.between:
           query[field] = { $gte: values[0], $lte: values[1] };
