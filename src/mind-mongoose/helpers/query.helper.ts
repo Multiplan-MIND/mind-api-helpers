@@ -5,23 +5,27 @@ import {
   SortEnum,
 } from '../../mind-graphql/entities/query.entities';
 
+function isNullOrUndefined<T>(obj: T | null | undefined): boolean {
+  return typeof obj === 'undefined' || obj === null;
+}
+
 export function getQuery(filters: FieldFilterInput[]) {
   const query = {};
   if (filters) {
     for (const filter of filters) {
       const field = filter.field;
       let values = [];
-      if (filter.stringValue) values.push(filter.stringValue);
-      else if (filter.stringValues) values = filter.stringValues;
-      else if (filter.intValue) values.push(filter.intValue);
-      else if (filter.intValues) values = filter.intValues;
-      else if (filter.dateValue) values.push(new Date(filter.dateValue));
-      else if (filter.dateValues) {
+      if (!isNullOrUndefined(filter.stringValue)) values.push(filter.stringValue);
+      else if (!isNullOrUndefined(filter.stringValues)) values = filter.stringValues;
+      else if (!isNullOrUndefined(filter.intValue)) values.push(filter.intValue);
+      else if (!isNullOrUndefined(filter.intValues)) values = filter.intValues;
+      else if (!isNullOrUndefined(filter.dateValue)) values.push(new Date(filter.dateValue));
+      else if (!isNullOrUndefined(filter.dateValues)) {
         for (const date of filter.dateValues) {
           values.push(new Date(date));
         }
-      } else if (filter.boolValue) values.push(filter.boolValue);
-      else if (filter.boolValues) values = filter.boolValues;
+      } else if (!isNullOrUndefined(filter.boolValue)) values.push(filter.boolValue);
+      else if (!isNullOrUndefined(filter.boolValues)) values = filter.boolValues;
 
       switch (filter.op) {
         case OperationEnum.eq:
