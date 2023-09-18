@@ -22,7 +22,13 @@ export class GraphqlAuthJwksService implements GqlOptionsFactory<ApolloFederatio
   ) {}
 
   async createGqlOptions(): Promise<ApolloFederationDriverConfig> {
+    this.logger.setMethod('createGqlOptions');
+
+    const prefixPath = process.env.PREFIX_PATH;
+    this.logger.debug(`Prefix path: ${prefixPath}`);
+
     return {
+      path: `${prefixPath}/graphql`,
       autoSchemaFile: { path: 'schema.gql', federation: 2 },
       sortSchema: true,
       playground: false,
