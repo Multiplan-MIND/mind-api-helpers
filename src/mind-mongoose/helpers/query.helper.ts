@@ -1,13 +1,10 @@
+import { isNullOrUndefined } from '../../mind-helpers/validation.helper';
 import {
   FieldFilterInput,
   OperationEnum,
   QueryOptionsInput,
   SortEnum,
 } from '../../mind-graphql/entities/query.entities';
-
-function isNullOrUndefined<T>(obj: T | null | undefined): boolean {
-  return typeof obj === 'undefined' || obj === null;
-}
 
 export function getQuery(filters: FieldFilterInput[]) {
   const query = {};
