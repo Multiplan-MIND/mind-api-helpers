@@ -1,8 +1,8 @@
 {
   "name": "mind-api-helpers",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "description": "",
-  "author": "",
+  "author": "https://github.com/Multiplan-MIND/",
   "private": true,
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
