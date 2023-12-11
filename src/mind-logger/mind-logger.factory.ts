@@ -36,7 +36,7 @@ export const MindLoggerFactory = (module: string): LoggerService => {
         filename: `logs/${module}.log`,
         format: fileFormat,
         maxsize: 1024 * 1000 * 200, // 204,8mb
-        maxFiles: 0,
+        maxFiles: 1,
       }),
     ],
   });
