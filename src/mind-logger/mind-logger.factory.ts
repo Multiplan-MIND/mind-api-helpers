@@ -35,6 +35,8 @@ export const MindLoggerFactory = (module: string): LoggerService => {
       new transports.File({
         filename: `logs/${module}.log`,
         format: fileFormat,
+        maxsize: 1024 * 1000 * 200, // 204,8mb
+        maxFiles: 0,
       }),
     ],
   });
