@@ -1,7 +1,7 @@
 import { Test } from '@nestjs/testing';
 import { createMindLoggerProviders } from './mind-logger.providers';
 import { MindLoggerService } from './mind-logger.service';
-import { logPrefix } from './mind-logger-util';
+import { logPrefix } from './mind-logger.util';
 
 describe('MindLoggerService', () => {
   let mindLoggerService: MindLoggerService;

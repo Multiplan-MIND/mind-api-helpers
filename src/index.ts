@@ -8,4 +8,5 @@ export * from './mind-logger/mind-logger.factory';
 export * from './mind-logger/mind-logger.module';
 export * from './mind-logger/mind-logger.providers';
 export * from './mind-logger/mind-logger.service';
+export * from './mind-logger/mind-logger.util';
 export * from './mind-mongoose/helpers/query.helper';
