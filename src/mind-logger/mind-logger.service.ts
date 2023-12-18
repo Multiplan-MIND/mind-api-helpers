@@ -7,48 +7,30 @@ import { jsonError } from '../mind-helpers/error.helper';
 })
 export class MindLoggerService {
   private module?: string;
-  private method?: string;
-  private infos?: string[];
 
   private loggerService?: LoggerService;
 
-  private prefix?: string;
-
-  info(message: string) {
-    this.loggerService?.log(message, this.prefix);
+  info(message: string, prefix: string) {
+    this.loggerService?.log(message, { module: this.module, prefix });
   }
-  error(message: string, err?: Error) {
+  error(message: string, prefix: string, err?: Error) {
     if (err) message += ` | ${JSON.stringify(jsonError(err))}`;
-    this.loggerService?.error(message, err?.stack, this.prefix);
+    this.loggerService?.error(message, err?.stack, { module: this.module, prefix });
   }
-  warn(message: string) {
-    this.loggerService?.warn(message, this.prefix);
+  warn(message: string, prefix: string) {
+    this.loggerService?.warn(message, { module: this.module, prefix });
   }
-  debug?(message: string) {
-    this.loggerService?.debug(message, this.prefix);
+  debug?(message: string, prefix: string) {
+    this.loggerService?.debug(message, { module: this.module, prefix });
   }
-  verbose?(message: string) {
-    this.loggerService?.verbose(message, this.prefix);
+  verbose?(message: string, prefix: string) {
+    this.loggerService?.verbose(message, { module: this.module, prefix });
   }
 
   setModule(module: string) {
     this.module = module;
 
-    this.prefix = `${process.pid}|${this.module}`;
     this.loggerService = MindLoggerFactory(this.module);
-    this.loggerService.debug('Fabricated Logger', this.prefix);
-  }
-
-  setMethod(method: string, infos?: string[]) {
-    this.method = method;
-    this.infos = infos;
-    this.prefix = `${process.pid}|${this.module}|${this.method}`;
-    if (this.infos) {
-      this.prefix += '#';
-      for (let i = 0; i < this.infos.length; i++) {
-        this.prefix += this.infos[i];
-        if (i + 1 != this.infos.length) this.prefix += ';';
-      }
-    }
+    this.loggerService.debug('Fabricated Logger');
   }
 }

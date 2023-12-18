@@ -1,0 +1,12 @@
+{
+    "css.validate": false,
+    "editor.codeActionsOnSave": {
+      "source.fixAll.eslint": "explicit"
+    },
+    "eslint.validate": [
+        "javascript"
+    ],
+    "git.autofetch": true,
+    "stylelint.config": null,
+    "stylelint.validate": [ "css", "scss"]
+}

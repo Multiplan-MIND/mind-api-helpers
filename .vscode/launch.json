@@ -1,0 +1,16 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "API Helpers - Jest",
+      "program": "${workspaceRoot}/node_modules/jest/bin/jest.js",
+      "args": ["--verbose", "-i", "--no-cache"],
+      "runtimeExecutable": "${env:HOME}/.nvm/versions/node/v20.5.1/bin/node",
+      "sourceMaps": true,
+      "cwd": "${workspaceRoot}",
+      "console": "integratedTerminal"
+    }
+  ]
+}
