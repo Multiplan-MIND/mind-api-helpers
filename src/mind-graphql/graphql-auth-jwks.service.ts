@@ -11,6 +11,7 @@ import GraphQLJSON from 'graphql-type-json';
 
 import { MindLoggerService } from '../mind-logger/mind-logger.service';
 import { MindLogger } from '../mind-logger/mind-logger.decorator';
+import { logPrefix } from 'src/mind-logger/mind-logger-util';
 
 @Injectable()
 export class GraphqlAuthJwksService implements GqlOptionsFactory<ApolloFederationDriverConfig> {
@@ -22,8 +23,6 @@ export class GraphqlAuthJwksService implements GqlOptionsFactory<ApolloFederatio
   ) {}
 
   async createGqlOptions(): Promise<ApolloFederationDriverConfig> {
-    this.logger.setMethod('createGqlOptions');
-
     return {
       path: `/*/graphql`,
       autoSchemaFile: { path: 'schema.gql', federation: 2 },
@@ -36,24 +35,24 @@ export class GraphqlAuthJwksService implements GqlOptionsFactory<ApolloFederatio
   }
 
   private async getPublicKey(kid) {
-    this.logger.setMethod('getPublicKey', [kid]);
+    const _log = logPrefix('getPublicKey', [kid]);
 
     let publicKey = await this.redis.get('JWKS_PUBLIC_KEY');
     if (!publicKey) {
-      this.logger.debug(`Loading public key: ${process.env.JWKS_URL}`);
+      this.logger.debug(`Loading public key: ${process.env.JWKS_URL}`, _log);
       const jwksResponse = await axios.get(process.env.JWKS_URL);
-      this.logger.debug('JWKS file downloaded');
+      this.logger.debug('JWKS file downloaded', _log);
 
       const [firstKey] = jwksResponse.data.keys.filter((item) => item.kid === kid);
       publicKey = jwkToPem(firstKey);
       await this.redis.set('JWKS_PUBLIC_KEY', publicKey, 'EX', this.ONE_DAY);
-      this.logger.debug('Public Key save in redis');
+      this.logger.debug('Public Key save in redis', _log);
     }
     return publicKey;
   }
 
   private async mindHandleContext({ req }) {
-    this.logger.setMethod('mindHandleContext');
+    const _log = logPrefix('mindHandleContext');
 
     const ctx = { mindUserId: null, mindUserRoles: null, mindSessionExpiresIn: null };
     try {
@@ -75,17 +74,17 @@ export class GraphqlAuthJwksService implements GqlOptionsFactory<ApolloFederatio
                 ctx.mindUserRoles = decoded.mindUserRoles;
                 ctx.mindSessionExpiresIn = decoded.mindSessionExpiresIn;
               } else {
-                this.logger.error(`Session Expired: ${expiresIn.toISOString()} x ${now.toISOString()}`);
+                this.logger.error(`Session Expired: ${expiresIn.toISOString()} x ${now.toISOString()}`, _log);
               }
             }
           } catch (e) {
-            this.logger.error(`Error setting context: ${e.message}`, e);
+            this.logger.error(`Error setting context: ${e.message}`, _log, e);
             return;
           }
         }
       }
     } catch (e) {
-      this.logger.error(`Error setting context: ${e.message}`, e);
+      this.logger.error(`Error setting context: ${e.message}`, _log, e);
       return;
     }
     return ctx;
