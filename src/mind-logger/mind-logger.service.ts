@@ -31,6 +31,6 @@ export class MindLoggerService {
     this.module = module;
 
     this.loggerService = MindLoggerFactory(this.module);
-    this.loggerService.debug('Fabricated Logger');
+    this.loggerService.debug('Fabricated Logger', { module });
   }
 }
