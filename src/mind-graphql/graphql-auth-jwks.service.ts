@@ -11,7 +11,7 @@ import GraphQLJSON from 'graphql-type-json';
 
 import { MindLoggerService } from '../mind-logger/mind-logger.service';
 import { MindLogger } from '../mind-logger/mind-logger.decorator';
-import { logPrefix } from 'src/mind-logger/mind-logger.util';
+import { logPrefix } from '../mind-logger/mind-logger.util';
 
 @Injectable()
 export class GraphqlAuthJwksService implements GqlOptionsFactory<ApolloFederationDriverConfig> {
