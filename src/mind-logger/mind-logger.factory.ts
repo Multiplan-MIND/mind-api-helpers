@@ -15,8 +15,8 @@ const formatMeta = (meta) => {
 };
 
 const mtsLoggerFormat = format.printf(({ context, level, message, timestamp, ms, ...meta }) => {
-  if (context.prefix) message = `${context.prefix}|${message}`;
-  return `${timestamp} [${context.module}] ${level}: ${message} | ${meta && formatMeta(meta)} | ${ms}`;
+  if (context?.prefix) message = `${context.prefix}|${message}`;
+  return `${timestamp} [${context?.module || context}] ${level}: ${message} | ${meta && formatMeta(meta)} | ${ms}`;
 });
 
 export const MindLoggerFactory = (module: string): LoggerService => {
