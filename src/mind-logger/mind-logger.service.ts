@@ -10,20 +10,20 @@ export class MindLoggerService {
 
   private loggerService?: LoggerService;
 
-  info(message: string, prefix: string) {
+  info(message: string, prefix?: string) {
     this.loggerService?.log(message, { module: this.module, prefix });
   }
-  error(message: string, prefix: string, err?: Error) {
+  error(message: string, prefix?: string, err?: Error) {
     if (err) message += ` | ${JSON.stringify(jsonError(err))}`;
     this.loggerService?.error(message, err?.stack, { module: this.module, prefix });
   }
-  warn(message: string, prefix: string) {
+  warn(message: string, prefix?: string) {
     this.loggerService?.warn(message, { module: this.module, prefix });
   }
-  debug?(message: string, prefix: string) {
+  debug?(message: string, prefix?: string) {
     this.loggerService?.debug(message, { module: this.module, prefix });
   }
-  verbose?(message: string, prefix: string) {
+  verbose?(message: string, prefix?: string) {
     this.loggerService?.verbose(message, { module: this.module, prefix });
   }
 

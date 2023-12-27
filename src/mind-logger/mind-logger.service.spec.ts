@@ -19,6 +19,8 @@ describe('MindLoggerService', () => {
     it('should return', async () => {
       mindLoggerService.setModule('TestModule');
       const prefix = logPrefix('TestMethod', ['info-1', 'info-2']);
+      mindLoggerService.info('Test Info without prefix');
+      mindLoggerService.error('Test Error without prefix', null, new Error('Errorrrr'));
       mindLoggerService.info('Test Info', prefix);
       mindLoggerService.error('Test Error', prefix, new Error('Errorrrr'));
       mindLoggerService.warn('Test Warn', prefix);
