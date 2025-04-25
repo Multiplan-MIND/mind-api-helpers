@@ -5,6 +5,7 @@ import {
   QueryOptionsInput,
   SortEnum,
 } from '../../mind-graphql/entities/query.entities';
+import { Types } from 'mongoose';
 
 export function getQuery(filters: FieldFilterInput[]) {
   const query = {};
@@ -23,6 +24,12 @@ export function getQuery(filters: FieldFilterInput[]) {
         }
       } else if (!isNullOrUndefined(filter.boolValue)) values.push(filter.boolValue);
       else if (!isNullOrUndefined(filter.boolValues)) values = filter.boolValues;
+      else if (!isNullOrUndefined(filter.objectIdValue)) values.push(new Types.ObjectId(filter.objectIdValue));
+      else if (!isNullOrUndefined(filter.objectIdValues)) {
+        for (const objectId of filter.objectIdValues) {
+          values.push(new Types.ObjectId(objectId));
+        }
+      }
 
       switch (filter.op) {
         case OperationEnum.eq:
