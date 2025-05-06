@@ -1,4 +1,5 @@
 import { Field, registerEnumType, InputType, Int } from '@nestjs/graphql';
+import { Types } from 'mongoose';
 
 export enum OperationEnum {
   eq,
@@ -46,6 +47,12 @@ export class FieldFilterInput {
 
   @Field(() => [Boolean], { nullable: true })
   boolValues?: boolean[];
+
+  @Field(() => [String], { nullable: true })
+  objectIdValue?: Types.ObjectId;
+
+  @Field(() => [String], { nullable: true })
+  objectIdValues?: Types.ObjectId[];
 }
 
 export enum SortEnum {

@@ -7,7 +7,7 @@
       "name": "API Helpers - Jest",
       "program": "${workspaceRoot}/node_modules/jest/bin/jest.js",
       "args": ["--verbose", "-i", "--no-cache"],
-      "runtimeExecutable": "${env:HOME}/.nvm/versions/node/v20.5.1/bin/node",
+      "runtimeExecutable": "${env:HOME}/.nvm/versions/node/v20.15.1/bin/node",
       "sourceMaps": true,
       "cwd": "${workspaceRoot}",
       "console": "integratedTerminal"
