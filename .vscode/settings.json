@@ -4,7 +4,8 @@
       "source.fixAll.eslint": "explicit"
     },
     "eslint.validate": [
-        "javascript"
+        "javascript",
+        "typescript"
     ],
     "git.autofetch": true,
     "stylelint.config": null,
