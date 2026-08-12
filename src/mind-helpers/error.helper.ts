@@ -26,7 +26,34 @@ export class MindError extends Error {
   }
 }
 
-export function jsonError(err: Error) {
+/**
+ * Normaliza para `Error` o valor capturado em um `catch`.
+ *
+ * Em JavaScript qualquer valor pode ser lançado, por isso o TypeScript tipa a variável do `catch`
+ * como `unknown`. Use este helper antes de acessar `.message`/`.stack` ou de repassar o valor para
+ * algo que espere um `Error`.
+ */
+export function toError(value: unknown): Error {
+  if (value instanceof Error) return value;
+
+  // Libs que rejeitam com objeto simples (drivers, clients HTTP) normalmente trazem `message`
+  const message = (value as { message?: unknown })?.message;
+  if (typeof message === 'string') return new Error(message);
+
+  return new Error(stringifyValue(value));
+}
+
+function stringifyValue(value: unknown): string {
+  if (typeof value === 'string') return value;
+  try {
+    // `JSON.stringify` devolve undefined para `undefined` e lança em referência circular
+    return JSON.stringify(value) ?? String(value);
+  } catch {
+    return String(value);
+  }
+}
+
+export function jsonError(err: unknown) {
   let json = {};
   if (axios.isAxiosError(err)) {
     if (err?.response?.config) {
@@ -52,7 +79,8 @@ export function jsonError(err: Error) {
       stack: err.stack,
     };
   } else {
-    json = err;
+    // mantém o valor original: `Error` serializa como `{}`, mas objetos simples preservam os campos
+    json = err as object;
   }
   return json;
 }
