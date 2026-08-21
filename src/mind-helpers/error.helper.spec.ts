@@ -22,6 +22,26 @@ describe('error.helper', () => {
       expect(toError({ code: 11000, message: 'duplicate key' }).message).toBe('duplicate key');
     });
 
+    it('should expose the code of a mongo error without a cast', () => {
+      const mongoLike: Error & { code?: number } = new Error('E11000 duplicate key error');
+      mongoLike.code = 11000;
+
+      const error = toError(mongoLike);
+
+      expect(error.code).toBe(11000);
+      expect(error).toBe(mongoLike);
+    });
+
+    it('should keep the code when normalizing a plain object', () => {
+      expect(toError({ code: 11000, message: 'duplicate key' }).code).toBe(11000);
+      expect(toError({ code: 'ECONNREFUSED', message: 'connect refused' }).code).toBe('ECONNREFUSED');
+    });
+
+    it('should leave the code undefined when there is none', () => {
+      expect(toError('Errorrrr').code).toBeUndefined();
+      expect(toError({ message: 'Errorrrr' }).code).toBeUndefined();
+    });
+
     it('should serialize objects without message', () => {
       expect(toError({ code: 11000 }).message).toBe('{"code":11000}');
     });

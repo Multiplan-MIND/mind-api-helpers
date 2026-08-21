@@ -27,18 +27,34 @@ export class MindError extends Error {
 }
 
 /**
+ * Erro capturado em um `catch`, com as propriedades que drivers e clients costumam anexar.
+ *
+ * `code` cobre tanto o número do MongoDB (11000 é chave duplicada) quanto os códigos em texto do
+ * Node e do axios ('ECONNREFUSED', 'ERR_BAD_REQUEST'), sem precisar de cast no ponto de uso.
+ * Para os campos de um erro axios (`response`, `config`), use `axios.isAxiosError(e)`, que estreita
+ * o tipo corretamente.
+ */
+export interface ThrownError extends Error {
+  code?: string | number;
+}
+
+/**
  * Normaliza para `Error` o valor capturado em um `catch`.
  *
  * Em JavaScript qualquer valor pode ser lançado, por isso o TypeScript tipa a variável do `catch`
  * como `unknown`. Use este helper antes de acessar `.message`/`.stack` ou de repassar o valor para
  * algo que espere um `Error`.
  */
-export function toError(value: unknown): Error {
+export function toError(value: unknown): ThrownError {
   if (value instanceof Error) return value;
 
   // Libs que rejeitam com objeto simples (drivers, clients HTTP) normalmente trazem `message`
-  const message = (value as { message?: unknown })?.message;
-  if (typeof message === 'string') return new Error(message);
+  const source = value as { message?: unknown; code?: unknown };
+  if (typeof source?.message === 'string') {
+    const error: ThrownError = new Error(source.message);
+    if (typeof source.code === 'string' || typeof source.code === 'number') error.code = source.code;
+    return error;
+  }
 
   return new Error(stringifyValue(value));
 }
