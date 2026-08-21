@@ -1,12 +1,20 @@
 {
-    "css.validate": false,
-    "editor.codeActionsOnSave": {
-      "source.fixAll.eslint": "explicit"
-    },
-    "eslint.validate": [
-        "javascript"
-    ],
-    "git.autofetch": true,
-    "stylelint.config": null,
-    "stylelint.validate": [ "css", "scss"]
+  "css.validate": false,
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit"
+  },
+  "eslint.validate": [
+    "javascript",
+    "typescript"
+  ],
+  "git.autofetch": true,
+  "stylelint.config": null,
+  "stylelint.validate": [
+    "css",
+    "scss"
+  ],
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.formatOnSave": true,
+  "files.insertFinalNewline": true,
+  "files.trimFinalNewlines": false
 }
