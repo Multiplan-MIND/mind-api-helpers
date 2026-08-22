@@ -48,7 +48,7 @@ export interface ThrownError extends Error {
 export function toError(value: unknown): ThrownError {
   if (value instanceof Error) return value;
 
-  // Libs que rejeitam com objeto simples (drivers, clients HTTP) normalmente trazem `message`
+  // Libs that reject with a plain object (drivers, HTTP clients) usually carry `message`
   const source = value as { message?: unknown; code?: unknown };
   if (typeof source?.message === 'string') {
     const error: ThrownError = new Error(source.message);

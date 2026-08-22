@@ -136,7 +136,7 @@ describe('MindLoggerService', () => {
         headers: {},
         config: {
           url: '/loyalty',
-          headers: { Authorization: 'valor-sensivel-nao-deve-vazar', 'X-API-KEY': 'chave-nao-deve-vazar' },
+          headers: { Authorization: 'sensitive-value-must-not-leak', 'X-API-KEY': 'api-key-must-not-leak' },
         },
       },
     });
@@ -146,8 +146,8 @@ describe('MindLoggerService', () => {
 
       expect(lastError().message).toContain('"status":401');
       expect(lastError().message).toContain('"code":"ERR_BAD_REQUEST"');
-      expect(lastError().message).not.toContain('valor-sensivel-nao-deve-vazar');
-      expect(lastError().message).not.toContain('chave-nao-deve-vazar');
+      expect(lastError().message).not.toContain('sensitive-value-must-not-leak');
+      expect(lastError().message).not.toContain('api-key-must-not-leak');
     });
 
     it('should forward the stack even though it is not an Error instance', () => {
