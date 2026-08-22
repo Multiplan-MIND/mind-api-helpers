@@ -12,6 +12,7 @@ import GraphQLJSON from 'graphql-type-json';
 import { MindLoggerService } from '../mind-logger/mind-logger.service';
 import { MindLogger } from '../mind-logger/mind-logger.decorator';
 import { logPrefix } from '../mind-logger/mind-logger.util';
+import { toError } from '../mind-helpers/error.helper';
 
 @Injectable()
 export class GraphqlAuthJwksService implements GqlOptionsFactory<ApolloFederationDriverConfig> {
@@ -78,13 +79,15 @@ export class GraphqlAuthJwksService implements GqlOptionsFactory<ApolloFederatio
               }
             }
           } catch (e) {
-            this.logger.error(`Error setting context: ${e.message}`, _log, e);
+            const err = toError(e);
+            this.logger.error(`Error setting context: ${err.message}`, _log, err);
             return;
           }
         }
       }
     } catch (e) {
-      this.logger.error(`Error setting context: ${e.message}`, _log, e);
+      const err = toError(e);
+      this.logger.error(`Error setting context: ${err.message}`, _log, err);
       return;
     }
     return ctx;

@@ -26,7 +26,50 @@ export class MindError extends Error {
   }
 }
 
-export function jsonError(err: Error) {
+/**
+ * An error caught in a `catch`, with properties that drivers and HTTP clients typically attach.
+ *
+ * `code` covers both MongoDB error numbers (11000 is duplicate key) and text codes from
+ * Node and axios ('ECONNREFUSED', 'ERR_BAD_REQUEST'), without needing a cast at the call site.
+ * For axios error fields (`response`, `config`), use `axios.isAxiosError(e)`, which narrows
+ * the type correctly.
+ */
+export interface ThrownError extends Error {
+  code?: string | number;
+}
+
+/**
+ * Normalizes the value caught in a `catch` to an `Error`.
+ *
+ * In JavaScript any value can be thrown, so TypeScript types the `catch` variable
+ * as `unknown`. Use this helper before accessing `.message`/`.stack` or passing the value to
+ * something that expects an `Error`.
+ */
+export function toError(value: unknown): ThrownError {
+  if (value instanceof Error) return value;
+
+  // Libs that reject with a plain object (drivers, HTTP clients) usually carry `message`
+  const source = value as { message?: unknown; code?: unknown };
+  if (typeof source?.message === 'string') {
+    const error: ThrownError = new Error(source.message);
+    if (typeof source.code === 'string' || typeof source.code === 'number') error.code = source.code;
+    return error;
+  }
+
+  return new Error(stringifyValue(value));
+}
+
+function stringifyValue(value: unknown): string {
+  if (typeof value === 'string') return value;
+  try {
+    // `JSON.stringify` returns undefined for `undefined` and throws on circular references
+    return JSON.stringify(value) ?? String(value);
+  } catch {
+    return String(value);
+  }
+}
+
+export function jsonError(err: unknown) {
   let json = {};
   if (axios.isAxiosError(err)) {
     if (err?.response?.config) {
@@ -52,7 +95,8 @@ export function jsonError(err: Error) {
       stack: err.stack,
     };
   } else {
-    json = err;
+    // preserves the original value: `Error` serializes as `{}`, but plain objects preserve their fields
+    json = err as object;
   }
   return json;
 }
