@@ -27,23 +27,23 @@ export class MindError extends Error {
 }
 
 /**
- * Erro capturado em um `catch`, com as propriedades que drivers e clients costumam anexar.
+ * An error caught in a `catch`, with properties that drivers and HTTP clients typically attach.
  *
- * `code` cobre tanto o número do MongoDB (11000 é chave duplicada) quanto os códigos em texto do
- * Node e do axios ('ECONNREFUSED', 'ERR_BAD_REQUEST'), sem precisar de cast no ponto de uso.
- * Para os campos de um erro axios (`response`, `config`), use `axios.isAxiosError(e)`, que estreita
- * o tipo corretamente.
+ * `code` covers both MongoDB error numbers (11000 is duplicate key) and text codes from
+ * Node and axios ('ECONNREFUSED', 'ERR_BAD_REQUEST'), without needing a cast at the call site.
+ * For axios error fields (`response`, `config`), use `axios.isAxiosError(e)`, which narrows
+ * the type correctly.
  */
 export interface ThrownError extends Error {
   code?: string | number;
 }
 
 /**
- * Normaliza para `Error` o valor capturado em um `catch`.
+ * Normalizes the value caught in a `catch` to an `Error`.
  *
- * Em JavaScript qualquer valor pode ser lançado, por isso o TypeScript tipa a variável do `catch`
- * como `unknown`. Use este helper antes de acessar `.message`/`.stack` ou de repassar o valor para
- * algo que espere um `Error`.
+ * In JavaScript any value can be thrown, so TypeScript types the `catch` variable
+ * as `unknown`. Use this helper before accessing `.message`/`.stack` or passing the value to
+ * something that expects an `Error`.
  */
 export function toError(value: unknown): ThrownError {
   if (value instanceof Error) return value;
@@ -62,7 +62,7 @@ export function toError(value: unknown): ThrownError {
 function stringifyValue(value: unknown): string {
   if (typeof value === 'string') return value;
   try {
-    // `JSON.stringify` devolve undefined para `undefined` e lança em referência circular
+    // `JSON.stringify` returns undefined for `undefined` and throws on circular references
     return JSON.stringify(value) ?? String(value);
   } catch {
     return String(value);
@@ -95,7 +95,7 @@ export function jsonError(err: unknown) {
       stack: err.stack,
     };
   } else {
-    // mantém o valor original: `Error` serializa como `{}`, mas objetos simples preservam os campos
+    // preserves the original value: `Error` serializes as `{}`, but plain objects preserve their fields
     json = err as object;
   }
   return json;

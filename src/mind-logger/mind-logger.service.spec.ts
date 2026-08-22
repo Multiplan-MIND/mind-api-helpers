@@ -28,7 +28,7 @@ describe('MindLoggerService', () => {
     mindLoggerService = await moduleRef.resolve<MindLoggerService>(MindLoggerService);
     mindLoggerService.setModule('TestModule');
 
-    // troca o winston por mocks para inspecionar o que o serviço repassa adiante
+    // replaces winston with mocks to inspect what the service forwards
     winston = { log: jest.fn(), error: jest.fn(), warn: jest.fn(), debug: jest.fn(), verbose: jest.fn() };
     mindLoggerService['loggerService'] = winston as unknown as LoggerService;
   });
@@ -39,7 +39,7 @@ describe('MindLoggerService', () => {
 
       mindLoggerService.error('Error in save', prefix, err);
 
-      // Error tem name/message como propriedades não enumeráveis, por isso serializa como {}
+      // Error has name/message as non-enumerable properties, so it serializes as {}
       expect(lastError().message).toBe('Error in save | {}');
       expect(lastError().stack).toBe(err.stack);
       expect(lastError().context).toEqual({ module: 'TestModule', prefix });
@@ -112,8 +112,8 @@ describe('MindLoggerService', () => {
       expect(lastError().message).toBe('Error in save');
     });
 
-    // limitação conhecida: o `JSON.stringify` do error() não trata referência circular, então logar
-    // derruba o fluxo. Se o serviço passar a tratar o caso, inverta para `not.toThrow()`.
+    // known limitation: the `JSON.stringify` in error() does not handle circular references, so logging
+    // causes the flow to break. If the service handles this case, change to `not.toThrow()`.
     it('should throw on a circular reference, which is a known limitation', () => {
       const err: Record<string, unknown> = { code: 11000 };
       err.self = err;
@@ -163,7 +163,7 @@ describe('MindLoggerService', () => {
 
       mindLoggerService.error('Error in save', prefix, err);
 
-      // efeito colateral de jsonError: os headers são apagados do objeto recebido, não de uma cópia
+      // side effect of jsonError: headers are deleted from the received object, not from a copy
       expect(err.response.config.headers).toEqual({});
     });
   });
