@@ -78,16 +78,16 @@ export class GraphqlAuthJwksService implements GqlOptionsFactory<ApolloFederatio
                 this.logger.error(`Session Expired: ${expiresIn.toISOString()} x ${now.toISOString()}`, _log);
               }
             }
-          } catch (e) {
-            const err = toError(e);
-            this.logger.error(`Error setting context: ${err.message}`, _log, err);
+          } catch (err) {
+            const e = toError(err);
+            this.logger.error(`Error setting context: ${e.message}`, _log, e);
             return;
           }
         }
       }
-    } catch (e) {
-      const err = toError(e);
-      this.logger.error(`Error setting context: ${err.message}`, _log, err);
+    } catch (err) {
+      const e = toError(err);
+      this.logger.error(`Error setting context: ${e.message}`, _log, e);
       return;
     }
     return ctx;

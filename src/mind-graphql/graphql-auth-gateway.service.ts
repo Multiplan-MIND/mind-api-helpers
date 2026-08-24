@@ -40,9 +40,9 @@ export class GraphqlAuthGatewayService implements GqlOptionsFactory<ApolloFedera
         ctx.mindUserRoles = req?.headers?.['mind-user-roles'].split(',');
         ctx.mindSessionExpiresIn = new Date(req?.headers?.['mind-session-expires-in']);
       }
-    } catch (e) {
-      const err = toError(e);
-      this.logger.error(`Error setting context: ${err.message}`, _log, err);
+    } catch (err) {
+      const e = toError(err);
+      this.logger.error(`Error setting context: ${e.message}`, _log, e);
       return;
     }
     return ctx;
