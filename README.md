@@ -7,14 +7,14 @@
 Biblioteca interna de apoio dos serviços MIND, escrita em NestJS. Não é uma aplicação: não tem
 `main.ts` nem servidor HTTP — só o que é compartilhado entre os `mind-api-*` / `multi-api-*`:
 
-| Módulo | O que oferece |
-| --- | --- |
-| `mind-logger` | logger baseado em winston, com escopo por módulo (`MindLoggerModule`, `MindLoggerService`, `@MindLogger()`, `logPrefix()`) |
-| `mind-helpers` | `MindError`, `toError()`, `jsonError()` e `isNullOrUndefined()` |
-| `mind-graphql` | `GraphqlAuthJwksService` e `GraphqlAuthGatewayService` (Apollo Federation 2) e os *input types* de consulta |
-| `mind-mongoose` | `getQuery()` / `getOptions()`, que traduzem os *inputs* GraphQL em filtro e opções do Mongoose |
+| Módulo          | O que oferece                                                                                                              |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `mind-logger`   | logger baseado em winston, com escopo por módulo (`MindLoggerModule`, `MindLoggerService`, `@MindLogger()`, `logPrefix()`) |
+| `mind-helpers`  | `MindError`, `toError()`, `jsonError()` e `isNullOrUndefined()`                                                            |
+| `mind-graphql`  | `GraphqlAuthJwksService` e `GraphqlAuthGatewayService` (Apollo Federation 2) e os _input types_ de consulta                |
+| `mind-mongoose` | `getQuery()` / `getOptions()`, que traduzem os _inputs_ GraphQL em filtro e opções do Mongoose                             |
 
-Tudo o que é público passa pelo *barrel* `src/index.ts`: um arquivo novo só fica visível para os
+Tudo o que é público passa pelo _barrel_ `src/index.ts`: um arquivo novo só fica visível para os
 serviços quando é reexportado lá.
 
 ## Idioma
@@ -27,7 +27,7 @@ O código em `src/` já está todo em inglês — mantenha assim.
 
 ## Requisitos
 
-- **Node v20.15.1**, a versão fixada no `.nvmrc` (a configuração de debug do VS Code aponta para esse
+- **Node v20.20.2**, a versão fixada no `.nvmrc` (a configuração de debug do VS Code aponta para esse
   caminho exato dentro do `$NVM_DIR`).
 - **yarn 1.x** (clássico) — o `yarn.lock` do repositório é v1.
 - Acesso de leitura à organização `Multiplan-MIND` no GitHub, já que a instalação é feita pela URL do
@@ -53,12 +53,12 @@ biblioteca direto do git — sem esse ciclo, o consumidor receberia o pacote sem
 
 ## Scripts
 
-| Comando | O que faz |
-| --- | --- |
-| `yarn build` | `tsc` gerando `dist/` (o `prebuild` limpa a pasta com `rimraf`) |
-| `yarn test` | jest, configuração em `jest.config.json` (`testRegex: .spec.ts$`) |
-| `yarn lint` | eslint; o prettier roda como regra do eslint |
-| `yarn lint-autofix` | o mesmo, com `--fix` |
+| Comando             | O que faz                                                         |
+| ------------------- | ----------------------------------------------------------------- |
+| `yarn build`        | `tsc` gerando `dist/` (o `prebuild` limpa a pasta com `rimraf`)   |
+| `yarn test`         | jest, configuração em `jest.config.json` (`testRegex: .spec.ts$`) |
+| `yarn lint`         | eslint; o prettier roda como regra do eslint                      |
+| `yarn lint-autofix` | o mesmo, com `--fix`                                              |
 
 ### Testes
 
@@ -122,9 +122,9 @@ export class MinhaService {
     const _log = logPrefix('salvar', ['id-123']);
     try {
       this.logger.info('Saving', _log);
-    } catch (e) {
-      const err = toError(e);
-      this.logger.error(`Error saving: ${err.message}`, _log, err);
+    } catch (err) {
+      const e = toError(err);
+      this.logger.error(`Error saving: ${e.message}`, _log, e);
     }
   }
 }
@@ -157,17 +157,17 @@ GraphQLModule.forRootAsync<ApolloFederationDriverConfig>({
   driver: ApolloFederationDriver,
   imports: [CacheModule, MindLoggerModule.forRoot()],
   useClass: process.env.GRAPHQL_SERVICE === 'jwks' ? GraphqlAuthJwksService : GraphqlAuthGatewayService,
-})
+});
 ```
 
 ## Variáveis de ambiente
 
 A biblioteca lê apenas duas — quem as define é o serviço que a consome (ela não carrega `.env`):
 
-| Variável | Efeito |
-| --- | --- |
-| `DEBUG` | qualquer valor definido sobe o nível do logger de `info` para `debug` |
-| `JWKS_URL` | endereço do documento JWKS usado pelo `GraphqlAuthJwksService` |
+| Variável   | Efeito                                                                |
+| ---------- | --------------------------------------------------------------------- |
+| `DEBUG`    | qualquer valor definido sobe o nível do logger de `info` para `debug` |
+| `JWKS_URL` | endereço do documento JWKS usado pelo `GraphqlAuthJwksService`        |
 
 O acesso ao redis não vem de variável: chega pelo provider `REDIS_CLIENT`, configurado no serviço.
 A chave pública fica em cache sob `JWKS_PUBLIC_KEY` por um dia.
