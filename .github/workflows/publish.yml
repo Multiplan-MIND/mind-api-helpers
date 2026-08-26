@@ -1,0 +1,81 @@
+name: Publish
+
+# Publishing is triggered by a merge into master, not by a tag: create-release.sh
+# only opens the release branch and its two PRs. Merging the master PR is the
+# intent gate; everything after it is automatic.
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: write # create the tag and the GitHub Release
+  packages: write # publish to GitHub Packages
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: yarn
+          registry-url: https://npm.pkg.github.com
+          scope: '@multiplan-mind'
+
+      - name: Read version from package.json
+        id: pkg
+        run: |
+          echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+          echo "name=$(node -p "require('./package.json').name")" >> "$GITHUB_OUTPUT"
+
+      # Makes the workflow idempotent: a merge into master without a version bump
+      # is a no-op, and re-running the job never fails on an already-taken version.
+      # npm view exits non-zero both when the version is missing and when the
+      # package does not exist yet, which is what we want for the first publish.
+      - name: Check whether this version is already published
+        id: check
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if npm view "${{ steps.pkg.outputs.name }}@${{ steps.pkg.outputs.version }}" version >/dev/null 2>&1; then
+            echo "Version ${{ steps.pkg.outputs.version }} is already published, nothing to do."
+            echo "published=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Version ${{ steps.pkg.outputs.version }} is not published yet."
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install dependencies
+        if: steps.check.outputs.published == 'false'
+        run: yarn install --frozen-lockfile
+
+      # Same gate as ci.yml: nothing reaches the registry without passing it.
+      - name: Lint
+        if: steps.check.outputs.published == 'false'
+        run: yarn lint
+
+      - name: Test
+        if: steps.check.outputs.published == 'false'
+        run: yarn test
+
+      - name: Build
+        if: steps.check.outputs.published == 'false'
+        run: yarn build
+
+      - name: Publish to GitHub Packages
+        if: steps.check.outputs.published == 'false'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm publish
+
+      - name: Create tag and GitHub Release
+        if: steps.check.outputs.published == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "v${{ steps.pkg.outputs.version }}" \
+            --title "v${{ steps.pkg.outputs.version }}" \
+            --target "$GITHUB_SHA" \
+            --generate-notes

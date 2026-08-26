@@ -18,7 +18,7 @@ Node is pinned by `.nvmrc` (v20.20.2) and the package manager is **yarn** (v1 / 
 
 ```bash
 nvm use                                   # required: the lockfile and the launch.json path assume v20
-yarn install                              # see the install cycle warning below
+yarn install
 yarn build                                # tsc -> dist/ (prebuild wipes dist via rimraf)
 yarn lint                                 # eslint (prettier runs as an eslint rule)
 yarn lint-autofix
@@ -32,32 +32,53 @@ provides an "API Helpers - Jest" debug configuration (hardcoded to `$NVM_DIR/ver
 
 ## How this library is distributed
 
-Consumers depend on the **git URL pinned to a tag**, not on a registry:
+Published to **GitHub Packages** as `@multiplan-mind/mind-api-helpers`, built by CI. Consumers
+install a version, not a git ref, and never compile the library themselves — the published tarball
+(16 kB) contains only `dist/`.
 
-```json
-"mind-api-helpers": "https://github.com/Multiplan-MIND/mind-api-helpers.git#1.3.0"
-```
+`dist/` stays gitignored; it exists only inside the tarball. Publishing is driven by
+`.github/workflows/publish.yml`, triggered by a push to `master`:
 
-`dist/` is gitignored, so the consumer has to build the package after cloning it. That is what the
-install cycle in `package.json` is for, and it is the reason the dependency layout looks wrong:
+1. Reads `version` from `package.json`.
+2. **If that version is already published, it exits without doing anything.** This is what makes the
+   workflow idempotent — a merge into `master` with no bump is a no-op, and a re-run never fails.
+3. Runs `lint`, `test`, `build` — the same gate as `ci.yml`.
+4. `npm publish` using the Actions-provided `GITHUB_TOKEN` (no PAT to create, no secret to rotate).
+5. Creates the `vX.Y.Z` tag and the GitHub Release.
 
-- `preinstall: yarn --ignore-scripts` — installs the dependency tree, `devDependencies` included, so
-  `typescript` exists inside the consumer's `node_modules/mind-api-helpers`.
-- `postinstall: yarn build` — compiles `src/` to `dist/`, which `main`/`types` point at.
+`.deploy/create-release.sh` only bumps `version` and opens the two PRs (`master` and `develop`); it
+neither tags nor publishes. `ci.yml` runs lint/test/build on every PR.
 
-Consequences to keep in mind when touching `package.json`:
+Consumers need an `.npmrc` with `@multiplan-mind:registry=https://npm.pkg.github.com`,
+`//npm.pkg.github.com/:_authToken=${NPM_TOKEN}` and `always-auth=true` — the last one is not
+optional, or yarn v1 omits the auth header on the download URLs it writes into `yarn.lock` and the
+second install 401s. See the README for the per-service migration steps.
 
-- Almost everything `src/` imports at **runtime** (`mongoose`, `ioredis`, `jsonwebtoken`, `jwk-to-pem`,
-  `graphql-type-json`, `winston`, `nest-winston`, `@nestjs/*`, `@apollo/server`) sits in
-  `devDependencies`; only `@nestjs/common` and `winston` are declared as peers. At runtime these
-  resolve from the **consumer's** `node_modules`, so a version bump here can silently disagree with
-  what the services install.
-- `axios` — imported by `error.helper.ts` and `graphql-auth-jwks.service.ts` — is not declared at all.
-  It only reaches `node_modules` because the single entry in `dependencies`, the deprecated
-  `@types/axios@0.14.0` stub, depends on `axios: "*"`.
-- Releasing means bumping `version` in `package.json`, tagging the commit, and updating the `#tag` in
-  each consuming repo. Branches are used as refs too (`#feature/to-error-helper`) while a change is
-  being validated against a service.
+### Dependency layout
+
+Every package is classified by actual use, cross-checking source `import`s, the `require()` calls
+that survive in `dist/`, and the types leaking into the public `.d.ts`:
+
+- `dependencies` — `axios`, `jsonwebtoken`, `jwk-to-pem`: leaf libraries with no shared singleton
+  that never appear in the public types.
+- `peerDependencies` — everything whose **instance identity** matters to the host Nest app, or that
+  appears in the `.d.ts`: `@nestjs/common`, `@nestjs/graphql`, `@nestjs/apollo`, `@apollo/server`,
+  `graphql-type-json`, `ioredis`, `mongoose`, `nest-winston`, `winston`, `reflect-metadata`.
+- `devDependencies` — build/lint/test tooling, the `@types`, plus a pinned copy of every peer so the
+  library compiles here.
+
+Two entries look wrong but are deliberate:
+
+- `@nestjs/core` and `rxjs` are devDeps and **not** peers. Nothing in `src/` uses them; they exist
+  because the `@nestjs/common` barrel does `require('rxjs/operators')` and `TestingModule` inherits
+  types from `@nestjs/core`. Whoever declares `@nestjs/common` satisfies those peers, not us.
+- `reflect-metadata` is a peer with no `import` anywhere. `dist/` calls `Reflect.metadata(...)`
+  behind a `typeof Reflect.metadata === 'function'` guard, so without the polyfill loaded by the
+  consumer the metadata is dropped **silently** and Nest DI breaks with no clear error.
+
+`ioredis` and `mongoose` are genuine runtime requires, not just types: `ioredis` because
+`emitDecoratorMetadata` emits the constructor's `design:paramtypes`, and `mongoose` because
+`query.helper.ts` calls `new Types.ObjectId(...)`.
 
 ## Architecture
 
@@ -130,8 +151,8 @@ the GraphQL defaults (`limit: 10`, sort by `updatedAt` desc) when they are.
   English; the README is the one document written in pt-BR.
 - Prettier config is duplicated in `.prettierrc` and inline in `.eslintrc.js` — edit both.
   Single quotes, 120 columns, trailing commas, 2 spaces.
-- `build` runs plain `tsc`, which picks up `tsconfig.json`, **not** `tsconfig.build.json`. Spec files
-  are therefore compiled into `dist/`, and `tsconfig.build.json` is effectively dead config.
+- `build` runs `tsc -p tsconfig.build.json`, which excludes the spec files from `dist/` (and with
+  them the stray `require("@nestjs/testing")` that used to ship in the package).
 - The `lint` script's `src/**/*.ts` is expanded by bash with `globstar` off, i.e. it means `src/*/*.ts`.
   `src/index.ts`, `src/mind-graphql/entities/` and `src/mind-mongoose/` are silently **not linted**.
   Pass explicit paths to `eslint` when checking those.
