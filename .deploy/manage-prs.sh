@@ -19,6 +19,18 @@ fi
 # Tentar encontrar os PRs da release
 echo -e "${YELLOW}Buscando PRs da branch $BRANCH_NAME...${NC}"
 
+# Verificar se gh CLI está instalado
+if ! command -v gh &> /dev/null; then
+    echo -e "${RED}Erro: GitHub CLI (gh) não está instalado!${NC}"
+    exit 1
+fi
+
+# Verificar se está autenticado no GitHub
+if ! gh auth status &> /dev/null; then
+    echo -e "${RED}Erro: Você não está autenticado no GitHub CLI!${NC}"
+    exit 1
+fi
+
 # Buscar PR para master
 pr_master_info=$(gh pr list --head "$BRANCH_NAME" --base master --json number --jq '.[0].number' 2>/dev/null)
 if [[ -n "$pr_master_info" ]]; then
@@ -37,18 +49,6 @@ if [[ -z "$PR_MASTER_NUMBER" && -z "$PR_DEVELOP_NUMBER" ]]; then
     echo -e "${YELLOW}⚠ Nenhum PR da release encontrado${NC}"
 fi
 echo ""
-
-# Verificar se gh CLI está instalado
-if ! command -v gh &> /dev/null; then
-    echo -e "${RED}Erro: GitHub CLI (gh) não está instalado!${NC}"
-    exit 1
-fi
-
-# Verificar se está autenticado no GitHub
-if ! gh auth status &> /dev/null; then
-    echo -e "${RED}Erro: Você não está autenticado no GitHub CLI!${NC}"
-    exit 1
-fi
 
 # Array para acumular changelogs
 declare -a changelogs=()
@@ -125,7 +125,7 @@ while true; do
             fi
 
             # Extrair changelog do corpo do PR
-            changelog_lines=$(echo "$pr_body" | sed -n '/## Changelog:/,/^$/p' | grep '^- ' | sed 's/\\n/\n/g')
+            changelog_lines=$(printf '%s' "$pr_body" | tr -d '\r' | sed -n '/## Changelog:/,/^[[:space:]]*$/p' | grep '^- ')
 
             echo ""
             echo -e "${BLUE}Informações do PR #$pr_number:${NC}"

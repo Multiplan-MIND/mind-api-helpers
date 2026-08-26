@@ -135,7 +135,7 @@ echo -e "${YELLOW}Iniciando processo de release...${NC}"
 echo "1/6 - Atualizando versão com npm version..."
 echo "Atualizando versão usando npm version $release_type..."
 new_version=$(update_version_with_npm "$release_type")
-echo -e "${GREEN}✓ Arquivos package.json e package-lock.json atualizados${NC}"
+echo -e "${GREEN}✓ Arquivo package.json atualizado${NC}"
 echo -e "${GREEN}Nova versão: $new_version${NC}"
 
 # Nome da branch
