@@ -66,7 +66,7 @@ export class GraphqlAuthJwksService implements GqlOptionsFactory<ApolloFederatio
 
           const publicKey = await this.getPublicKey(kid);
           try {
-            const decoded = jwt.verify(token, publicKey);
+            const decoded = jwt.verify(token, publicKey) as jwt.JwtPayload;
             if (decoded.mindSessionExpiresIn) {
               const expiresIn = new Date(decoded.mindSessionExpiresIn);
               const now = new Date();
