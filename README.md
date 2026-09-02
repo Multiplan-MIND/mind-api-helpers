@@ -17,6 +17,10 @@ Biblioteca interna de apoio dos serviços MIND, escrita em NestJS. Não é uma a
 Tudo o que é público passa pelo _barrel_ `src/index.ts`: um arquivo novo só fica visível para os
 serviços quando é reexportado lá.
 
+> A arquitetura interna (o padrão decorator/registry do logger, a convenção de erros, a
+> direção das dependências entre os módulos) e as armadilhas conhecidas estão em
+> [`CLAUDE.md`](./CLAUDE.md).
+
 ## Idioma
 
 Este README é o único documento em português. **O código é em inglês** — identificadores, nomes de

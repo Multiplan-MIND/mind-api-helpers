@@ -2,6 +2,31 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## README.md vs CLAUDE.md
+
+Which file a fact belongs in — apply this before adding anything to either:
+
+> Does the fact change what you **type in a terminal / open in a browser**, or what
+> you **write inside a file**?
+
+| README.md — the contract and the intent      | CLAUDE.md — the map and the minefield                     |
+| -------------------------------------------- | --------------------------------------------------------- |
+| What the service is, setup, how to run it    | Where the code lives and why it is shaped that way        |
+| URLs, ports, env vars, staging               | Invariants and conventions to follow when adding code     |
+| API contract: GraphQL, REST, queues          | Implementation traps (silent bypasses, load-bearing bits) |
+| Deploy and branch flow                       | Where reality diverges from the docs: broken scripts, stale claims, config drift |
+| Operational troubleshooting (terminal recipe)| Implementation gotchas (only matter with a file open)     |
+
+Three rules keep the two files from drifting into copies of each other:
+
+1. **One owner per fact.** If it is useful in both, it lives with its owner and the
+   other file links to it — it is never restated.
+2. **The command cheat sheet below is the only sanctioned duplication.** It mirrors
+   the README's narrated setup on purpose, because it is what gets run constantly.
+3. **Language is part of the fence.** The README is pt-BR, this file is English. If
+   you find yourself translating a paragraph across the two, you are duplicating it.
+
+
 ## What this repository is
 
 A private, internal NestJS support library (`mind-api-helpers`) shared by the `mind-api-*` /
@@ -11,6 +36,9 @@ import.
 
 Everything public goes through the barrel `src/index.ts`. A new file is invisible to consumers until
 it is re-exported there.
+
+Requirements, install, scripts, the consumer contract (`.npmrc`, peers, usage examples) and
+the release process live in [`README.md`](./README.md).
 
 ## Commands
 
@@ -30,29 +58,19 @@ yarn test -t 'should preserve subclasses' # one test by name
 There is no watch/coverage script; use `yarn test --watch` / `--coverage` directly. `.vscode/launch.json`
 provides an "API Helpers - Jest" debug configuration (hardcoded to `$NVM_DIR/versions/node/v20.20.2`).
 
-## How this library is distributed
+## What being a published package constrains
 
-Published to **GitHub Packages** as `@multiplan-mind/mind-api-helpers`, built by CI. Consumers
-install a version, not a git ref, and never compile the library themselves — the published tarball
-(16 kB) contains only `dist/`.
+The README documents the release flow and the consumer-side `.npmrc`. What it means for code
+written here:
 
-`dist/` stays gitignored; it exists only inside the tarball. Publishing is driven by
-`.github/workflows/publish.yml`, triggered by a push to `master`:
-
-1. Reads `version` from `package.json`.
-2. **If that version is already published, it exits without doing anything.** This is what makes the
-   workflow idempotent — a merge into `master` with no bump is a no-op, and a re-run never fails.
-3. Runs `lint`, `test`, `build` — the same gate as `ci.yml`.
-4. `npm publish` using the Actions-provided `GITHUB_TOKEN` (no PAT to create, no secret to rotate).
-5. Creates the `vX.Y.Z` tag and the GitHub Release.
-
-`.deploy/create-release.sh` only bumps `version` and opens the two PRs (`master` and `develop`); it
-neither tags nor publishes. `ci.yml` runs lint/test/build on every PR.
-
-Consumers need an `.npmrc` with `@multiplan-mind:registry=https://npm.pkg.github.com`,
-`//npm.pkg.github.com/:_authToken=${NPM_TOKEN}` and `always-auth=true` — the last one is not
-optional, or yarn v1 omits the auth header on the download URLs it writes into `yarn.lock` and the
-second install 401s. See the README for the per-service migration steps.
+- **The published tarball contains only `dist/`** (16 kB). Anything a consumer needs at runtime
+  must survive compilation and be re-exported from `src/index.ts` — a file that is only imported
+  internally is invisible to them.
+- **`build` runs `tsc -p tsconfig.build.json`**, which excludes the spec files from `dist/` (and
+  with them the stray `require("@nestjs/testing")` that used to ship in the package).
+- **The version in `package.json` is the publish trigger.** `publish.yml` exits early if that
+  version already exists, so a merge to `master` without a bump is a silent no-op — if a change
+  did not reach consumers, check the bump before anything else.
 
 ### Dependency layout
 
@@ -101,9 +119,9 @@ inside `beforeEach` (see `mind-logger.service.spec.ts`).
 
 `MindLoggerService` is `Scope.TRANSIENT` and lazy: `loggerService` is undefined until `setModule()`
 builds the winston logger, and every method uses `?.`, so logging before `setModule()` is a silent
-no-op. `MindLoggerFactory` writes to `logs/<module>.log` **relative to `process.cwd()`** and switches
-the level to `debug` when `process.env.DEBUG` is set. `logPrefix(method, infos)` builds the
-`pid|method#info1;info2` string that every call site passes as `prefix`.
+no-op. `logPrefix(method, infos)` builds the `pid|method#info1;info2` string that every call site
+passes as `prefix`; where `MindLoggerFactory` puts the file and what `DEBUG` does are in the
+README.
 
 ### `mind-helpers/error.helper.ts`
 
@@ -144,21 +162,20 @@ together: a new `OperationEnum` member needs a matching `case` in `getQuery`, an
 non-null wins). `getOptions` defaults to `skip: 0, limit: 100` when no options are given, but honours
 the GraphQL defaults (`limit: 10`, sort by `updatedAt` desc) when they are.
 
-## Conventions and gotchas
+## Conventions
 
-- **Code is English only**, per the "Idioma" section of the README: identifiers, file names, comments,
-  commit messages, branch names, log/error strings and test descriptions. `src/` is already fully in
-  English; the README is the one document written in pt-BR.
-- Prettier config is duplicated in `.prettierrc` and inline in `.eslintrc.js` — edit both.
-  Single quotes, 120 columns, trailing commas, 2 spaces.
-- `build` runs `tsc -p tsconfig.build.json`, which excludes the spec files from `dist/` (and with
-  them the stray `require("@nestjs/testing")` that used to ship in the package).
-- The `lint` script's `src/**/*.ts` is expanded by bash with `globstar` off, i.e. it means `src/*/*.ts`.
-  `src/index.ts`, `src/mind-graphql/entities/` and `src/mind-mongoose/` are silently **not linted**.
-  Pass explicit paths to `eslint` when checking those.
-- `strictNullChecks` and `noImplicitAny` are off, so absent null checks are not compiler errors here
-  even though they would be in the consuming services.
-- Running the tests writes real log files to `logs/` (the "with the real winston logger" suite is
-  intentionally not mocked); `logs/` is gitignored.
-- `test/` exists but is empty — specs live next to the code as `*.spec.ts`.
-- Dependabot opens PRs against `develop`; `master` is the release branch that carries the tags.
+- `strictNullChecks` and `noImplicitAny` are off — here **and** in all five consuming services
+  (verified 2026-09-02). Absent null checks are never a compiler error anywhere in the platform,
+  so nullability is a review concern, not a compiler-enforced one. An earlier version of this
+  file claimed the consumers were stricter; they are not.
+
+## Reality vs. the docs
+
+- **No consumer has migrated to 2.x yet.** As of 2026-09-02 all five services
+  (`mind-api-user`, `-webhook`, `-router`, `-parking`, `-payment`) still install this library
+  from the git tag `#1.5.0`, and none of them has an `.npmrc`. So the README's migration guide
+  describes work that has not started: the `1.x` tags must keep working, and 1.x compatibility
+  is a live constraint on anything changed here — not a legacy concern.
+- **`mind-api-router` cannot migrate as-is.** It does not declare `mongoose`, which the barrel
+  genuinely `require`s since `query.helper.ts` began calling `new Types.ObjectId(...)`. Today it
+  resolves only through the nested `node_modules` the git install leaves behind.
