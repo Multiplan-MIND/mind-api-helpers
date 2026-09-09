@@ -12,7 +12,6 @@ import GraphQLJSON from 'graphql-type-json';
 import { MindLoggerService } from '../mind-logger/mind-logger.service';
 import { MindLogger } from '../mind-logger/mind-logger.decorator';
 import { logPrefix } from '../mind-logger/mind-logger.util';
-import { toError } from '../mind-helpers/error.helper';
 
 @Injectable()
 export class GraphqlAuthJwksService implements GqlOptionsFactory<ApolloFederationDriverConfig> {
@@ -66,7 +65,7 @@ export class GraphqlAuthJwksService implements GqlOptionsFactory<ApolloFederatio
 
           const publicKey = await this.getPublicKey(kid);
           try {
-            const decoded = jwt.verify(token, publicKey);
+            const decoded = jwt.verify(token, publicKey) as jwt.JwtPayload;
             if (decoded.mindSessionExpiresIn) {
               const expiresIn = new Date(decoded.mindSessionExpiresIn);
               const now = new Date();
@@ -79,15 +78,13 @@ export class GraphqlAuthJwksService implements GqlOptionsFactory<ApolloFederatio
               }
             }
           } catch (e) {
-            const err = toError(e);
-            this.logger.error(`Error setting context: ${err.message}`, _log, err);
+            this.logger.error('Error setting context', _log, e);
             return;
           }
         }
       }
     } catch (e) {
-      const err = toError(e);
-      this.logger.error(`Error setting context: ${err.message}`, _log, err);
+      this.logger.error('Error setting context', _log, e);
       return;
     }
     return ctx;
