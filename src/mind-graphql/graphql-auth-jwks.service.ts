@@ -12,7 +12,6 @@ import GraphQLJSON from 'graphql-type-json';
 import { MindLoggerService } from '../mind-logger/mind-logger.service';
 import { MindLogger } from '../mind-logger/mind-logger.decorator';
 import { logPrefix } from '../mind-logger/mind-logger.util';
-import { toError } from '../mind-helpers/error.helper';
 
 @Injectable()
 export class GraphqlAuthJwksService implements GqlOptionsFactory<ApolloFederationDriverConfig> {
@@ -78,16 +77,14 @@ export class GraphqlAuthJwksService implements GqlOptionsFactory<ApolloFederatio
                 this.logger.error(`Session Expired: ${expiresIn.toISOString()} x ${now.toISOString()}`, _log);
               }
             }
-          } catch (err) {
-            const e = toError(err);
-            this.logger.error(`Error setting context: ${e.message}`, _log, e);
+          } catch (e) {
+            this.logger.error('Error setting context', _log, e);
             return;
           }
         }
       }
-    } catch (err) {
-      const e = toError(err);
-      this.logger.error(`Error setting context: ${e.message}`, _log, e);
+    } catch (e) {
+      this.logger.error('Error setting context', _log, e);
       return;
     }
     return ctx;
