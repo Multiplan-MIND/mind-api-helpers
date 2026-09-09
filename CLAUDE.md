@@ -14,7 +14,7 @@ it is re-exported there.
 
 ## Commands
 
-Node is pinned by `.nvmrc` (v20.15.1) and the package manager is **yarn** (v1 / classic).
+Node is pinned by `.nvmrc` (v20.20.2) and the package manager is **yarn** (v1 / classic).
 
 ```bash
 nvm use                                   # required: the lockfile and the launch.json path assume v20
@@ -28,7 +28,7 @@ yarn test -t 'should preserve subclasses' # one test by name
 ```
 
 There is no watch/coverage script; use `yarn test --watch` / `--coverage` directly. `.vscode/launch.json`
-provides an "API Helpers - Jest" debug configuration (hardcoded to `$NVM_DIR/versions/node/v20.15.1`).
+provides an "API Helpers - Jest" debug configuration (hardcoded to `$NVM_DIR/versions/node/v20.20.2`).
 
 ## How this library is distributed
 
