@@ -1,25 +1,32 @@
 {
-  "name": "mind-api-helpers",
-  "version": "1.6.0",
+  "name": "@multiplan-mind/mind-api-helpers",
+  "version": "2.0.0",
   "description": "",
   "author": "https://github.com/Multiplan-MIND/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Multiplan-MIND/mind-api-helpers.git"
+  },
   "engines": {
     "node": ">=20.15.1 <21"
   },
-  "private": true,
+  "license": "UNLICENSED",
+  "private": false,
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
-    "/dist"
+    "dist"
   ],
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
   "scripts": {
     "lint": "eslint src/**/*.ts --ignore-pattern src/**/*.spec.ts",
     "lint-autofix": "eslint src/**/*.ts --ignore-pattern src/**/*.spec.ts --fix",
     "test": "jest",
     "prebuild": "rimraf dist/*",
     "build": "tsc -p tsconfig.build.json",
-    "preinstall": "yarn --ignore-scripts",
-    "postinstall": "yarn build"
+    "prepublishOnly": "yarn build"
   },
   "dependencies": {
     "axios": "1.6.0",

@@ -17,6 +17,10 @@ Biblioteca interna de apoio dos serviços MIND, escrita em NestJS. Não é uma a
 Tudo o que é público passa pelo _barrel_ `src/index.ts`: um arquivo novo só fica visível para os
 serviços quando é reexportado lá.
 
+> A arquitetura interna (o padrão decorator/registry do logger, a convenção de erros, a
+> direção das dependências entre os módulos) e as armadilhas conhecidas estão em
+> [`CLAUDE.md`](./CLAUDE.md).
+
 ## Idioma
 
 Este README é o único documento em português. **O código é em inglês** — identificadores, nomes de
@@ -30,8 +34,8 @@ O código em `src/` já está todo em inglês — mantenha assim.
 - **Node v20.20.2**, a versão fixada no `.nvmrc` (a configuração de debug do VS Code aponta para esse
   caminho exato dentro do `$NVM_DIR`).
 - **yarn 1.x** (clássico) — o `yarn.lock` do repositório é v1.
-- Acesso de leitura à organização `Multiplan-MIND` no GitHub, já que a instalação é feita pela URL do
-  git, não por um registry.
+- Acesso de leitura à organização `Multiplan-MIND` no GitHub. Para **consumir** a biblioteca, um token
+  com escopo `read:packages` exposto como `NPM_TOKEN` (veja "Uso em um serviço").
 
 ## Clone e instalação
 
@@ -42,14 +46,9 @@ nvm use          # respeita o .nvmrc
 yarn install
 ```
 
-O `yarn install` **já compila o `dist/`**, por conta do ciclo declarado no `package.json`:
-
-- `preinstall: yarn --ignore-scripts` instala a árvore de dependências incluindo as `devDependencies`,
-  garantindo que o `typescript` exista;
-- `postinstall: yarn build` compila `src/` em `dist/`, que é o que `main` e `types` apontam.
-
-Isso existe porque o `dist/` não é versionado (está no `.gitignore`) e os serviços instalam esta
-biblioteca direto do git — sem esse ciclo, o consumidor receberia o pacote sem código compilado.
+O `dist/` não é versionado (está no `.gitignore`); rode `yarn build` para gerá-lo localmente. Quem
+consome a biblioteca não precisa compilá-la: o pacote publicado no GitHub Packages já contém o
+`dist/` pronto.
 
 ## Scripts
 
@@ -92,16 +91,34 @@ A mesma configuração está duplicada dentro do `.eslintrc.js`: ao mudar uma, m
 
 ## Uso em um serviço
 
-A dependência é declarada pela URL do git, fixada em uma tag:
+A biblioteca é publicada no **GitHub Packages** sob o escopo `@multiplan-mind`. O serviço precisa de
+duas coisas: um `.npmrc` apontando o escopo para o registry do GitHub, e a dependência declarada por
+versão.
+
+```ini
+# .npmrc — versionado no serviço; não contém segredo
+@multiplan-mind:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${NPM_TOKEN}
+always-auth=true
+```
 
 ```json
 "dependencies": {
-  "mind-api-helpers": "https://github.com/Multiplan-MIND/mind-api-helpers.git#1.4.0"
+  "@multiplan-mind/mind-api-helpers": "^2.0.0"
 }
 ```
 
-Durante o desenvolvimento de uma alteração também se aponta para uma branch
-(`...mind-api-helpers.git#feature/minha-branch`), para validar contra o serviço antes de gerar a tag.
+```ts
+import { MindLogger, MindLoggerService, logPrefix } from '@multiplan-mind/mind-api-helpers';
+```
+
+O `always-auth=true` não é opcional: sem ele o yarn v1 não envia o header de autenticação para as
+URLs de download que grava no `yarn.lock`, e o install falha com 401 na segunda execução. O
+`${NPM_TOKEN}` é expandido do ambiente pelo yarn, então o arquivo pode ser commitado.
+
+Para validar uma alteração contra um serviço antes de publicar, use `yarn link` ou aponte a
+dependência para o caminho local (`"file:../mind-api-helpers"`), lembrando de rodar `yarn build`
+aqui antes.
 
 ### Logger
 
@@ -174,24 +191,75 @@ A chave pública fica em cache sob `JWKS_PUBLIC_KEY` por um dia.
 
 ## Dependências e ambientes
 
-Quase tudo o que o código importa em tempo de execução (`mongoose`, `ioredis`, `jsonwebtoken`,
-`jwk-to-pem`, `graphql-type-json`, `winston`, `nest-winston`, `@nestjs/*`, `@apollo/server`) está em
-`devDependencies`, e só `@nestjs/common` e `winston` estão declarados como `peerDependencies`. Em
-produção essas bibliotecas são resolvidas no `node_modules` **do serviço**, não no desta biblioteca —
-então subir uma versão aqui pode divergir do que os serviços instalam. Vale conferir o serviço antes
-de mexer nas versões.
+Cada pacote está classificado pelo uso real — cruzando os `import` do fonte, os `require()` que
+sobrevivem no `dist/` e os tipos que vazam nos `.d.ts` públicos:
 
-O `axios`, usado por `error.helper.ts` e pelo serviço JWKS, não está declarado: ele só aparece porque
-a única entrada em `dependencies`, o pacote descontinuado `@types/axios`, depende de `axios: "*"`.
+| Bloco                 | O que vai nele                                                                                                                                  |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `dependencies`        | `axios`, `jsonwebtoken`, `jwk-to-pem` — bibliotecas-folha, sem singleton compartilhado e que não aparecem nos tipos públicos. Instaladas junto. |
+| `peerDependencies`    | `@nestjs/common`, `@nestjs/graphql`, `@nestjs/apollo`, `@apollo/server`, `graphql-type-json`, `ioredis`, `mongoose`, `nest-winston`, `winston`, `reflect-metadata` — quem precisa ser **a mesma instância** do serviço, ou aparece nos `.d.ts`. |
+| `devDependencies`     | ferramentas de build/lint/teste, os `@types`, e uma cópia de cada peer para compilar aqui.                                                       |
+
+Dois casos que parecem erro e não são:
+
+- `@nestjs/core` e `rxjs` estão em `devDependencies` mas **não** em `peerDependencies`. O código não os
+  usa; eles existem porque o barrel do `@nestjs/common` faz `require('rxjs/operators')` e o
+  `TestingModule` herda tipos do `@nestjs/core`. Quem satisfaz esses peers é o serviço que declara o
+  `@nestjs/common`, não esta biblioteca.
+- `reflect-metadata` é peer sem nenhum `import`. O `dist/` chama `Reflect.metadata(...)` atrás de um
+  guard `typeof Reflect.metadata === 'function'`: se o serviço não carregar o polyfill, os metadados
+  são descartados **em silêncio** e a injeção de dependência do Nest quebra sem erro claro.
+
+Ao subir a versão de um peer aqui, confira antes o que os serviços instalam — a versão declarada
+precisa continuar compatível com todos eles.
 
 ## Versionamento e publicação
 
-Não há publicação em registry. Liberar uma versão é:
+A biblioteca é publicada no **GitHub Packages** por GitHub Actions. O fluxo:
 
-1. subir o campo `version` do `package.json`;
-2. criar a tag correspondente no commit em `master` — o padrão atual é sem o prefixo `v` (`1.4.0`);
-   existe um `v1.1.0` antigo, que é exceção;
-3. atualizar o `#tag` no `package.json` de cada serviço que consome a biblioteca.
+```
+.deploy/create-release.sh   →  branch release/X.Y.Z + PR para master + PR para develop
+merge do PR de master       →  publish.yml: valida, publica, cria a tag vX.Y.Z e a Release
+```
+
+O `create-release.sh` só sobe o `version` e abre os dois PRs — ele não publica nem cria tag. Quem faz
+isso é o `.github/workflows/publish.yml`, disparado por push em `master`:
+
+1. lê o `version` do `package.json`;
+2. **se essa versão já estiver publicada, encerra sem fazer nada.** É o que torna o workflow
+   idempotente: merge em `master` sem subir a versão é no-op, e reexecutar o job nunca falha;
+3. roda `lint`, `test` e `build` — o mesmo portão do `ci.yml`, nada é publicado sem passar;
+4. `npm publish`, autenticado com o `GITHUB_TOKEN` do próprio Actions (não há PAT a criar nem
+   segredo a rotacionar para publicar);
+5. cria a tag `vX.Y.Z` e a GitHub Release com notas geradas.
+
+O `ci.yml` roda `lint`, `test` e `build` em todo PR e em push para `develop`/`master`.
 
 `master` é a branch de release e carrega as tags; `develop` recebe a integração e é o alvo dos PRs do
 dependabot.
+
+### Migração da instalação por tag git (1.x → 2.x)
+
+Até a 1.x os serviços instalavam pela URL do git (`...mind-api-helpers.git#1.5.0`) e compilavam a
+biblioteca no `postinstall`. Isso fazia o `node_modules/mind-api-helpers` do serviço pesar **209 MB**,
+com as `devDependencies` daqui aninhadas dentro dele — e, pior, o Node resolvia `winston`, `ioredis` e
+`@nestjs/*` por essas cópias, não pelas do serviço. A 2.x acaba com isso: o pacote publicado tem
+**16 kB** e só contém `dist/`.
+
+As tags `1.x` continuam funcionando, então dá para migrar um serviço de cada vez. Por serviço:
+
+1. adicionar o `.npmrc` (veja "Uso em um serviço") e cadastrar `NPM_TOKEN` no Vault;
+2. trocar a dependência git por `"@multiplan-mind/mind-api-helpers": "^2.0.0"`;
+3. `sed` nos imports: `from 'mind-api-helpers'` → `from '@multiplan-mind/mind-api-helpers'`;
+4. **declarar os `peerDependencies` que faltarem** — sem o `node_modules` aninhado eles passam a ser
+   exigidos de verdade. Levantamento em 26/08/2026: falta `mongoose` no `mind-api-router`, e
+   `graphql-type-json`, `ioredis`, `nest-winston` e `winston` no `multi-api-loyalty`;
+5. no `Dockerfile`, trocar `RUN --mount=type=ssh yarn --pure-lockfile` por
+   `RUN --mount=type=secret,id=npmtoken NPM_TOKEN=$(cat /run/secrets/npmtoken) yarn install --frozen-lockfile`,
+   e incluir o `yarn.lock` no `COPY` (hoje ele não é copiado, e o `--pure-lockfile` não tem efeito);
+6. no `Jenkinsfile`, buscar `NPM_TOKEN` do Vault e repassá-lo com
+   `docker build --secret id=npmtoken,env=NPM_TOKEN`.
+
+O detalhe do `mind-api-router` merece atenção: entre a 1.3.0 e a 1.6.0 o `mongoose` deixou de ser
+type-only (`query.helper.ts` passou a usar `new Types.ObjectId(...)`), então o barrel faz
+`require('mongoose')`. Hoje isso resolve pela cópia aninhada; sem ela é `MODULE_NOT_FOUND` no boot.
