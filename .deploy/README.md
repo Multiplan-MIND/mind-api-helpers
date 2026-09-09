@@ -12,8 +12,8 @@ Script automatizado para criação de releases seguindo o padrão de versionamen
 
 - ✅ Verifica e atualiza automaticamente a branch `master`
 - ✅ Cria branch de release no formato `release/X.Y.Z`
-- ✅ Atualiza versão automaticamente usando `npm version` nos arquivos `package.json` e `package-lock.json`
-- ✅ Garante consistência entre package.json e package-lock.json
+- ✅ Atualiza versão automaticamente usando `npm version` nos arquivos `package.json` e `yarn.lock`
+- ✅ Garante consistência entre package.json e yarn.lock
 - ✅ Cria commits automáticos com a nova versão
 - ✅ Publica a branch no GitHub
 - ✅ Cria Pull Requests automaticamente para `master` e `develop`
@@ -734,10 +734,10 @@ Se encontrar problemas ou tiver sugestões de melhoria para os scripts, abra uma
 
 ##### **v2.0 - Novembro 2025**
 
-- ✅ **Uso do `npm version`**: O script agora utiliza `npm version` para atualizar automaticamente tanto `package.json` quanto `package-lock.json`, garantindo consistência entre os arquivos
+- ✅ **Uso do `npm version`**: O script agora utiliza `npm version` para atualizar automaticamente tanto `package.json` quanto `yarn.lock`, garantindo consistência entre os arquivos
 - ✅ **Simplificação**: Remoção de cálculos manuais de versão, delegando para o npm a responsabilidade de incrementar corretamente as versões
 - ✅ **Melhor tratamento de erros**: Validação se npm está instalado e tratamento de erros do comando `npm version`
-- ✅ **Sincronização automática**: Garante que package-lock.json seja sempre atualizado junto com package.json
+- ✅ **Sincronização automática**: Garante que yarn.lock seja sempre atualizado junto com package.json
 
 ---
 
