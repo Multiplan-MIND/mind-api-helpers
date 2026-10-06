@@ -14,21 +14,24 @@ it is re-exported there.
 
 ## Commands
 
-Node is pinned by `.nvmrc` (v20.20.2) and the package manager is **yarn** (v1 / classic).
+Node is pinned by `.nvmrc` (24) and the package manager is **yarn** (v1 / classic). Tests need Node >= 24.9:
+the NestJS 12 packages are ESM-only and Jest 30 can only `require()` them from that version on.
 
 ```bash
-nvm use                                   # required: the lockfile and the launch.json path assume v20
+nvm use                                   # required: Jest needs Node >= 24.9 (require(esm))
 yarn install                              # see the install cycle warning below
 yarn build                                # tsc -> dist/ (prebuild wipes dist via rimraf)
 yarn lint                                 # eslint (prettier runs as an eslint rule)
 yarn lint-autofix
-yarn test                                 # jest, config in jest.config.json, testRegex .spec.ts$
+yarn test                                 # node --experimental-vm-modules jest; config in jest.config.json
 yarn test src/mind-helpers               # one directory
 yarn test -t 'should preserve subclasses' # one test by name
 ```
 
-There is no watch/coverage script; use `yarn test --watch` / `--coverage` directly. `.vscode/launch.json`
-provides an "API Helpers - Jest" debug configuration (hardcoded to `$NVM_DIR/versions/node/v20.20.2`).
+There is no watch/coverage script; use `yarn test --watch` / `--coverage` directly. Since 1.9.0 the `test`
+script runs Jest under `node --experimental-vm-modules`; without the flag every suite that imports `@nestjs/*`
+fails with `Must use import to load ES Module` (NestJS 12 ships ESM only). `.vscode/launch.json` provides an
+"API Helpers - Jest" debug configuration (nvm `runtimeVersion` 24, same flag).
 
 ## How this library is distributed
 
@@ -49,12 +52,16 @@ Consequences to keep in mind when touching `package.json`:
 
 - Almost everything `src/` imports at **runtime** (`mongoose`, `ioredis`, `jsonwebtoken`, `jwk-to-pem`,
   `graphql-type-json`, `winston`, `nest-winston`, `@nestjs/*`, `@apollo/server`) sits in
-  `devDependencies`; only `@nestjs/common` and `winston` are declared as peers. At runtime these
+  `devDependencies`. The peers are `@nestjs/common` ^12, `@nestjs/graphql` ^14, `@nestjs/apollo` ^14,
+  `@apollo/server` ^5, `nest-winston` ^2, `winston` ^3, `graphql-type-json`, `ioredis`, `mongoose` 7/8 and
+  `reflect-metadata` 0.1/0.2, so 1.9.0 only fits consumers already on NestJS 12 (1.8.0 is the Nest 11 line).
+  At runtime these
   resolve from the **consumer's** `node_modules`, so a version bump here can silently disagree with
   what the services install.
-- `axios` — imported by `error.helper.ts` and `graphql-auth-jwks.service.ts` — is not declared at all.
-  It only reaches `node_modules` because the single entry in `dependencies`, the deprecated
-  `@types/axios@0.14.0` stub, depends on `axios: "*"`.
+- `dependencies` holds only `axios`, `jsonwebtoken` and `jwk-to-pem` (exact pins). `axios` is imported by
+  `error.helper.ts` and `graphql-auth-jwks.service.ts`.
+- `engines.node` is `>=20.19.0` since 1.9.0: NestJS 12 ships ESM only and CommonJS consumers load it through
+  Node's `require(esm)`, unflagged from 20.19 on. Running this package's tests needs Node >= 24.9 (Jest).
 - Releasing means bumping `version` in `package.json`, tagging the commit, and updating the `#tag` in
   each consuming repo. Branches are used as refs too (`#feature/to-error-helper`) while a change is
   being validated against a service.

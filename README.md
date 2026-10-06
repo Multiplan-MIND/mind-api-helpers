@@ -27,8 +27,9 @@ O código em `src/` já está todo em inglês — mantenha assim.
 
 ## Requisitos
 
-- **Node v20.20.2**, a versão fixada no `.nvmrc` (a configuração de debug do VS Code aponta para esse
-  caminho exato dentro do `$NVM_DIR`).
+- **Node 24**, a versão fixada no `.nvmrc` (a configuração de debug do VS Code usa a mesma versão via
+  `runtimeVersion`). Os testes precisam de Node 24.9 ou mais novo: os pacotes do NestJS 12 são só ESM e o
+  Jest 30 só consegue dar `require()` neles a partir dessa versão.
 - **yarn 1.x** (clássico) — o `yarn.lock` do repositório é v1.
 - Acesso de leitura à organização `Multiplan-MIND` no GitHub, já que a instalação é feita pela URL do
   git, não por um registry.
@@ -53,12 +54,12 @@ biblioteca direto do git — sem esse ciclo, o consumidor receberia o pacote sem
 
 ## Scripts
 
-| Comando             | O que faz                                                         |
-| ------------------- | ----------------------------------------------------------------- |
-| `yarn build`        | `tsc` gerando `dist/` (o `prebuild` limpa a pasta com `rimraf`)   |
-| `yarn test`         | jest, configuração em `jest.config.json` (`testRegex: .spec.ts$`) |
-| `yarn lint`         | eslint; o prettier roda como regra do eslint                      |
-| `yarn lint-autofix` | o mesmo, com `--fix`                                              |
+| Comando             | O que faz                                                            |
+| ------------------- | -------------------------------------------------------------------- |
+| `yarn build`        | `tsc` gerando `dist/` (o `prebuild` limpa a pasta com `rimraf`)      |
+| `yarn test`         | jest (com `--experimental-vm-modules`), config em `jest.config.json` |
+| `yarn lint`         | eslint; o prettier roda como regra do eslint                         |
+| `yarn lint-autofix` | o mesmo, com `--fix`                                                 |
 
 ### Testes
 
@@ -71,6 +72,10 @@ yarn test -t 'should preserve subclasses'   # um teste pelo nome
 yarn test --watch
 yarn test --coverage
 ```
+
+O script `test` roda o Jest como `node --experimental-vm-modules ./node_modules/jest/bin/jest.js`. A flag é
+obrigatória desde a `1.9.0`: o NestJS 12 só publica ESM, e sem ela o Jest falha com
+`Must use import to load ES Module`. Ao chamar o Jest de outro jeito (`npx jest`, IDE), passe a flag também.
 
 O VS Code tem a configuração de debug **"API Helpers - Jest"** em `.vscode/launch.json`.
 
@@ -152,8 +157,9 @@ Dois detalhes que costumam gerar dúvida:
 Ambas exigem que o serviço forneça um provider `REDIS_CLIENT` (um client `ioredis`) e, em caso de
 falha, retornam `undefined` em vez de lançar — os resolvers ficam sem contexto.
 
-A partir da `1.8.0` as duas exigem NestJS 11, `@nestjs/graphql`/`@nestjs/apollo` 13 e
-`@apollo/server` 5 (ver `peerDependencies`). O `@nestjs/apollo` 13 carrega o
+A partir da `1.9.0` as duas exigem NestJS 12, `@nestjs/graphql`/`@nestjs/apollo` 14, `nest-winston` 2 e
+`@apollo/server` 5 (ver `peerDependencies`); a `1.8.0` era a linha do NestJS 11 (`@nestjs/graphql`/
+`@nestjs/apollo` 13). O `@nestjs/apollo` carrega o
 `@as-integrations/express5` em tempo de execução, então o serviço precisa tê-lo instalado. O serviço
 JWKS publica em `/*splat/graphql` (sintaxe do Express 5, equivalente ao antigo `/*/graphql`), e as
 duas mantêm o status 200 do Apollo 4 para erros de coerção de variáveis
@@ -184,13 +190,20 @@ A chave pública fica em cache sob `JWKS_PUBLIC_KEY` por um dia.
 
 Quase tudo o que o código importa em tempo de execução (`mongoose`, `ioredis`, `jsonwebtoken`,
 `jwk-to-pem`, `graphql-type-json`, `winston`, `nest-winston`, `@nestjs/*`, `@apollo/server`) está em
-`devDependencies`, e só `@nestjs/common` e `winston` estão declarados como `peerDependencies`. Em
+`devDependencies`. As `peerDependencies` declaram o que o serviço precisa ter instalado: `@nestjs/common`
+^12, `@nestjs/graphql` ^14, `@nestjs/apollo` ^14, `@apollo/server` ^5, `nest-winston` ^2, `winston` ^3,
+`graphql-type-json`, `ioredis`, `mongoose` (7 ou 8) e `reflect-metadata` (0.1 ou 0.2). Por causa dessas
+faixas, a `1.9.0` só serve para serviços já no NestJS 12; serviços no NestJS 11 ficam na `1.8.0`. Em
 produção essas bibliotecas são resolvidas no `node_modules` **do serviço**, não no desta biblioteca —
 então subir uma versão aqui pode divergir do que os serviços instalam. Vale conferir o serviço antes
 de mexer nas versões.
 
-O `axios`, usado por `error.helper.ts` e pelo serviço JWKS, não está declarado: ele só aparece porque
-a única entrada em `dependencies`, o pacote descontinuado `@types/axios`, depende de `axios: "*"`.
+As `dependencies` têm só `axios` (usado por `error.helper.ts` e pelo serviço JWKS), `jsonwebtoken` e
+`jwk-to-pem`, com versões exatas.
+
+O `engines.node` é `>=20.19.0` desde a `1.9.0`: o NestJS 12 só publica ESM, e um serviço CommonJS o carrega
+pelo `require(esm)` do Node, liberado sem flag a partir da 20.19. Para rodar os testes desta biblioteca é
+preciso Node 24.9 ou mais novo (Jest).
 
 ## Versionamento e publicação
 

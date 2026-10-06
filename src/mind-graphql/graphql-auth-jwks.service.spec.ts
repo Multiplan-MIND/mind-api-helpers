@@ -65,6 +65,7 @@ describe('GraphqlAuthJwksService', () => {
       const { regexp } = pathToRegexp(path, { end: false });
       expect(regexp.test('/user/graphql')).toBe(true);
       expect(regexp.test('/a/b/graphql')).toBe(true);
+      expect(regexp.test('/user/graphql/x')).toBe(true);
       expect(regexp.test('/graphql')).toBe(false);
     });
   });
