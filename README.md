@@ -152,6 +152,14 @@ Dois detalhes que costumam gerar dúvida:
 Ambas exigem que o serviço forneça um provider `REDIS_CLIENT` (um client `ioredis`) e, em caso de
 falha, retornam `undefined` em vez de lançar — os resolvers ficam sem contexto.
 
+A partir da `1.8.0` as duas exigem NestJS 11, `@nestjs/graphql`/`@nestjs/apollo` 13 e
+`@apollo/server` 5 (ver `peerDependencies`). O `@nestjs/apollo` 13 carrega o
+`@as-integrations/express5` em tempo de execução, então o serviço precisa tê-lo instalado. O serviço
+JWKS publica em `/*splat/graphql` (sintaxe do Express 5, equivalente ao antigo `/*/graphql`), e as
+duas mantêm o status 200 do Apollo 4 para erros de coerção de variáveis
+(`status400ForVariableCoercionErrors: false`) e, como o `@nestjs/graphql` 12, ignoram o resolver `JSON`
+quando nenhum campo usa esse scalar (`requireResolversToMatchSchema: 'ignore'`).
+
 ```ts
 GraphQLModule.forRootAsync<ApolloFederationDriverConfig>({
   driver: ApolloFederationDriver,

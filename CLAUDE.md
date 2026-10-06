@@ -139,5 +139,9 @@ the GraphQL defaults (`limit: 10`, sort by `updatedAt` desc) when they are.
   even though they would be in the consuming services.
 - Running the tests writes real log files to `logs/` (the "with the real winston logger" suite is
   intentionally not mocked); `logs/` is gitignored.
+- Never add `graphql` to `devDependencies`. The consumer's `preinstall` installs this package's devDependencies
+  nested under `node_modules/mind-api-helpers/node_modules`, and a second `graphql` copy there makes the
+  `@Field(() => Int)` input types in `query.entities.ts` unresolvable in the consumer ("Cannot determine a GraphQL
+  input type"). Specs stub `graphql-type-json` instead.
 - `test/` exists but is empty — specs live next to the code as `*.spec.ts`.
 - Dependabot opens PRs against `develop`; `master` is the release branch that carries the tags.

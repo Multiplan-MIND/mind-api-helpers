@@ -23,8 +23,13 @@ export class GraphqlAuthGatewayService implements GqlOptionsFactory<ApolloFedera
       autoSchemaFile: { path: 'schema.gql', federation: 2 },
       sortSchema: true,
       playground: false,
+      // Apollo Server 5 answers variable coercion errors with 400; keep the Apollo Server 4 status (200)
+      status400ForVariableCoercionErrors: false,
       plugins: [ApolloServerPluginLandingPageLocalDefault()],
       resolvers: { JSON: GraphQLJSON },
+      // @nestjs/graphql 13 validates the resolver map against the federated schema; keep ignoring `JSON` when no
+      // field uses it, as @nestjs/graphql 12 did
+      resolverValidationOptions: { requireResolversToMatchSchema: 'ignore' },
       context: ({ req }) => this.mindHandleContext({ req }),
     };
   }
