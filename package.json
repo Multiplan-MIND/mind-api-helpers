@@ -13,8 +13,8 @@
     "/dist"
   ],
   "scripts": {
-    "lint": "eslint src/**/*.ts --ignore-pattern src/**/*.spec.ts",
-    "lint-autofix": "eslint src/**/*.ts --ignore-pattern src/**/*.spec.ts --fix",
+    "lint": "eslint src/**/*.ts --ignore-pattern src/**/*.spec.ts --ignore-pattern src/**/*.spec-helper.ts",
+    "lint-autofix": "eslint src/**/*.ts --ignore-pattern src/**/*.spec.ts --ignore-pattern src/**/*.spec-helper.ts --fix",
     "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js",
     "prebuild": "rimraf dist/*",
     "build": "tsc -p tsconfig.build.json",

@@ -8,10 +8,11 @@ import type { Federation2Config } from '@nestjs/graphql';
  * `@apollo/gateway` 2.4.x rejects them with "Invalid version ... for the federation feature". Raise it only
  * together with the router's gateway.
  */
-export const MIND_FEDERATION_CONFIG: Federation2Config = {
+export const MIND_FEDERATION_CONFIG: Readonly<Federation2Config> = Object.freeze({
   version: 2,
   importUrl: 'https://specs.apollo.dev/federation/v2.3',
-  directives: [
+  // `Object.freeze` returns a readonly tuple; @nestjs/graphql types `directives` as a mutable string[] (it never mutates it)
+  directives: Object.freeze([
     '@composeDirective',
     '@extends',
     '@external',
@@ -23,5 +24,5 @@ export const MIND_FEDERATION_CONFIG: Federation2Config = {
     '@requires',
     '@shareable',
     '@tag',
-  ],
-};
+  ]) as string[],
+});
