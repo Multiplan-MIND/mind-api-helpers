@@ -173,6 +173,21 @@ compostos pelo `@apollo/gateway` 2.4.x do `mind-api-router`. **A `1.8.0` (NestJS
 e não pode ser composta pelo gateway 2.4.x — use a `1.9.0` (fixa v2.3).** Só suba essa versão junto com o
 gateway do router.
 
+**Serviços em TypeScript 5.9 precisam de um `paths` no `tsconfig.json`.** O ciclo de instalação desta
+biblioteca deixa uma segunda cópia do `@apollo/server` (e dos `@nestjs/*`) em
+`node_modules/mind-api-helpers/node_modules`. O TypeScript 5.9 não junta as duas cópias, e o build do serviço
+falha com `TS2322` no `useClass` do `GraphQLModule.forRootAsync(...)`: os tipos `HeaderMap` das duas cópias
+`have separate declarations of a private property '__identity'`. O TypeScript 5.1 aceitava. A correção é
+apontar o `@apollo/server` para a cópia da raiz em `compilerOptions` (ao lado do `baseUrl: "./"`). Isso só
+muda a resolução de tipos; o JS gerado é o mesmo:
+
+```json
+"paths": {
+  "@apollo/server": ["node_modules/@apollo/server"],
+  "@apollo/server/*": ["node_modules/@apollo/server/*"]
+}
+```
+
 ```ts
 GraphQLModule.forRootAsync<ApolloFederationDriverConfig>({
   driver: ApolloFederationDriver,

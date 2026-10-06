@@ -129,6 +129,19 @@ Both services take the federation `@link` from `MIND_FEDERATION_CONFIG` (`graphq
 the federation feature"). 1.8.0 (Nest 11) emits federation v2.12 and cannot be composed by gateway 2.4.x — consume
 1.9.0 (pins v2.3). Raise the pin only together with the router's gateway; the specs assert the exact `@link` line.
 
+Consumers on TypeScript 5.9 need a tsconfig `paths` entry. The install cycle leaves a second `@apollo/server`
+(and `@nestjs/*`) under `node_modules/mind-api-helpers/node_modules`. TS 5.9 does not merge the two copies
+(their package ids differ), so the consumer build fails with TS2322 on `GraphQLModule.forRootAsync({ useClass })`
+(`HeaderMap` `separate declarations of a private property '__identity'`). TS 5.1 accepted it. Fix in the
+consumer's `compilerOptions` (next to `baseUrl: "./"`). It affects type resolution only; the emitted JS is unchanged:
+
+```json
+"paths": {
+  "@apollo/server": ["node_modules/@apollo/server"],
+  "@apollo/server/*": ["node_modules/@apollo/server/*"]
+}
+```
+
 `mind-mongoose/helpers/query.helper.ts` translates the GraphQL input types from
 `mind-graphql/entities/query.entities.ts` into a Mongoose filter/options pair, so the two evolve
 together: a new `OperationEnum` member needs a matching `case` in `getQuery`, and a new
