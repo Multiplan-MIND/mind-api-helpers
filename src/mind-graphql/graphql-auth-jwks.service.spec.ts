@@ -2,8 +2,12 @@ import { generateKeyPairSync, KeyObject } from 'crypto';
 import * as jwt from 'jsonwebtoken';
 import axios from 'axios';
 import { pathToRegexp } from 'path-to-regexp';
+import { ApolloFederationDriverConfig } from '@nestjs/apollo';
+import { Federation2Config, SchemaFileConfig } from '@nestjs/graphql';
+import { TypeDefsDecoratorFactory } from '@nestjs/graphql/dist/federation/type-defs-decorator.factory.js';
 import GraphQLJSON from 'graphql-type-json';
 
+import { MIND_FEDERATION_CONFIG } from './graphql-federation.config';
 import { GraphqlAuthJwksService } from './graphql-auth-jwks.service';
 
 jest.mock('axios');
@@ -12,9 +16,26 @@ jest.mock('axios');
 jest.mock('graphql-type-json', () => ({ __esModule: true, default: { name: 'JSON' } }));
 
 type LoggerMock = { debug: jest.Mock; error: jest.Mock };
+
+// Runs the @nestjs/graphql code that writes the federation `@link` into the subgraph type defs
+// (GraphQLFederationFactory -> TypeDefsDecoratorFactory -> TypeDefsFederation2Decorator) with the service options
+const federationLinkOf = (options: ApolloFederationDriverConfig) => {
+  const { federation } = options.autoSchemaFile as SchemaFileConfig;
+  const config = federation as Federation2Config;
+  const typeDefs = new TypeDefsDecoratorFactory()
+    .create(config.version, 2)
+    .decorate('type Query { ok: Boolean }', config);
+  return typeDefs.trim().split('\n')[0].trim();
+};
 type RedisMock = { get: jest.Mock; set: jest.Mock };
 
 describe('GraphqlAuthJwksService', () => {
+  // The exact @link the subgraph declared under NestJS 10 (@nestjs/graphql 12); mind-api-router's gateway 2.4.x
+  // rejects the newer defaults (v2.12, v2.14), so this line is part of the contract
+  const NEST_10_FEDERATION_LINK =
+    'extend schema @link(url: "https://specs.apollo.dev/federation/v2.3", import: ["@composeDirective", "@extends", ' +
+    '"@external", "@inaccessible", "@interfaceObject", "@key", "@override", "@provides", "@requires", "@shareable", "@tag"])';
+
   const kid = 'test-kid';
   let privateKey: KeyObject;
   let publicKey: KeyObject;
@@ -48,7 +69,7 @@ describe('GraphqlAuthJwksService', () => {
 
       expect(options).toMatchObject({
         path: '/*splat/graphql',
-        autoSchemaFile: { path: 'schema.gql', federation: 2 },
+        autoSchemaFile: { path: 'schema.gql', federation: MIND_FEDERATION_CONFIG },
         sortSchema: true,
         playground: false,
         status400ForVariableCoercionErrors: false,
@@ -57,6 +78,12 @@ describe('GraphqlAuthJwksService', () => {
       });
       expect(options.plugins).toHaveLength(1);
       expect(options.context).toEqual(expect.any(Function));
+    });
+
+    it('should declare the NestJS 10 federation link (v2.3, 11 directives) in the generated subgraph SDL', async () => {
+      const options = await service.createGqlOptions();
+
+      expect(federationLinkOf(options)).toBe(NEST_10_FEDERATION_LINK);
     });
 
     it('should use a path that Express 5 (path-to-regexp 8) accepts and that matches any prefix', async () => {

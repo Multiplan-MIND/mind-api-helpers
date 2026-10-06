@@ -1,6 +1,7 @@
 export * from './mind-graphql/entities/query.entities';
 export * from './mind-graphql/graphql-auth-jwks.service';
 export * from './mind-graphql/graphql-auth-gateway.service';
+export * from './mind-graphql/graphql-federation.config';
 export * from './mind-helpers/error.helper';
 export * from './mind-helpers/validation.helper';
 export * from './mind-logger/mind-logger.decorator';

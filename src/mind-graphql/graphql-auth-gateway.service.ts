@@ -8,6 +8,7 @@ import GraphQLJSON from 'graphql-type-json';
 import { MindLoggerService } from '../mind-logger/mind-logger.service';
 import { MindLogger } from '../mind-logger/mind-logger.decorator';
 import { logPrefix } from '../mind-logger/mind-logger.util';
+import { MIND_FEDERATION_CONFIG } from './graphql-federation.config';
 
 @Injectable()
 export class GraphqlAuthGatewayService implements GqlOptionsFactory<ApolloFederationDriverConfig> {
@@ -20,7 +21,8 @@ export class GraphqlAuthGatewayService implements GqlOptionsFactory<ApolloFedera
 
   async createGqlOptions(): Promise<ApolloFederationDriverConfig> {
     return {
-      autoSchemaFile: { path: 'schema.gql', federation: 2 },
+      // Federation link pinned to v2.3 so mind-api-router (@apollo/gateway 2.4.x) can compose the subgraph
+      autoSchemaFile: { path: 'schema.gql', federation: MIND_FEDERATION_CONFIG },
       sortSchema: true,
       playground: false,
       // Apollo Server 5 answers variable coercion errors with 400; keep the Apollo Server 4 status (200)

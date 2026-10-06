@@ -123,6 +123,12 @@ token against a JWKS document fetched from `process.env.JWKS_URL` and cached in 
 router, the JWKS variant at the edge. On failure both return `undefined` instead of throwing, which
 leaves the resolvers with no context.
 
+Both services take the federation `@link` from `MIND_FEDERATION_CONFIG` (`graphql-federation.config.ts`):
+`federation/v2.3` with the 11 directives NestJS 10 imported, in that order. The newer @nestjs/graphql defaults
+(v2.12 in 13, v2.14 in 14) are rejected by `mind-api-router`'s `@apollo/gateway` 2.4.x ("Invalid version ... for
+the federation feature"). 1.8.0 (Nest 11) emits federation v2.12 and cannot be composed by gateway 2.4.x — consume
+1.9.0 (pins v2.3). Raise the pin only together with the router's gateway; the specs assert the exact `@link` line.
+
 `mind-mongoose/helpers/query.helper.ts` translates the GraphQL input types from
 `mind-graphql/entities/query.entities.ts` into a Mongoose filter/options pair, so the two evolve
 together: a new `OperationEnum` member needs a matching `case` in `getQuery`, and a new

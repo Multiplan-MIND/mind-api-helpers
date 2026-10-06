@@ -166,6 +166,13 @@ duas mantêm o status 200 do Apollo 4 para erros de coerção de variáveis
 (`status400ForVariableCoercionErrors: false`) e, como o `@nestjs/graphql` 12, ignoram o resolver `JSON`
 quando nenhum campo usa esse scalar (`requireResolversToMatchSchema: 'ignore'`).
 
+O `@link` de federação que o subgraph declara fica fixo em `MIND_FEDERATION_CONFIG`
+(`src/mind-graphql/graphql-federation.config.ts`): `federation/v2.3` com as mesmas 11 diretivas que o
+NestJS 10 importava. Os padrões mais novos do `@nestjs/graphql` (v2.12 no 13, v2.14 no 14) não são
+compostos pelo `@apollo/gateway` 2.4.x do `mind-api-router`. **A `1.8.0` (NestJS 11) emite federation v2.12
+e não pode ser composta pelo gateway 2.4.x — use a `1.9.0` (fixa v2.3).** Só suba essa versão junto com o
+gateway do router.
+
 ```ts
 GraphQLModule.forRootAsync<ApolloFederationDriverConfig>({
   driver: ApolloFederationDriver,
