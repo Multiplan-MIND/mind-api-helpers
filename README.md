@@ -214,7 +214,7 @@ Quase tudo o que o código importa em tempo de execução (`mongoose`, `ioredis`
 `jwk-to-pem`, `graphql-type-json`, `winston`, `nest-winston`, `@nestjs/*`, `@apollo/server`) está em
 `devDependencies`. As `peerDependencies` declaram o que o serviço precisa ter instalado: `@nestjs/common`
 ^12, `@nestjs/graphql` ^14, `@nestjs/apollo` ^14, `@apollo/server` ^5, `nest-winston` ^2, `winston` ^3,
-`graphql-type-json`, `ioredis`, `mongoose` (7 ou 8) e `reflect-metadata` (0.1 ou 0.2). Por causa dessas
+`graphql-type-json`, `ioredis`, `mongoose` (7, 8 ou 9) e `reflect-metadata` (0.1 ou 0.2). Por causa dessas
 faixas, a `1.9.0` só serve para serviços já no NestJS 12; serviços no NestJS 11 ficam na `1.8.0`. Em
 produção essas bibliotecas são resolvidas no `node_modules` **do serviço**, não no desta biblioteca —
 então subir uma versão aqui pode divergir do que os serviços instalam. Vale conferir o serviço antes

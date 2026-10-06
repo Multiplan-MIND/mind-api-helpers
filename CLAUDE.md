@@ -53,7 +53,7 @@ Consequences to keep in mind when touching `package.json`:
 - Almost everything `src/` imports at **runtime** (`mongoose`, `ioredis`, `jsonwebtoken`, `jwk-to-pem`,
   `graphql-type-json`, `winston`, `nest-winston`, `@nestjs/*`, `@apollo/server`) sits in
   `devDependencies`. The peers are `@nestjs/common` ^12, `@nestjs/graphql` ^14, `@nestjs/apollo` ^14,
-  `@apollo/server` ^5, `nest-winston` ^2, `winston` ^3, `graphql-type-json`, `ioredis`, `mongoose` 7/8 and
+  `@apollo/server` ^5, `nest-winston` ^2, `winston` ^3, `graphql-type-json`, `ioredis`, `mongoose` 7/8/9 and
   `reflect-metadata` 0.1/0.2, so 1.9.0 only fits consumers already on NestJS 12 (1.8.0 is the Nest 11 line).
   At runtime these
   resolve from the **consumer's** `node_modules`, so a version bump here can silently disagree with
