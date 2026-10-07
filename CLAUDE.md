@@ -51,12 +51,15 @@ Consequences to keep in mind when touching `package.json`:
 
 - Almost everything `src/` imports at **runtime** (`mongoose`, `ioredis`, `jsonwebtoken`, `jwk-to-pem`,
   `graphql-type-json`, `winston`, `nest-winston`, `@nestjs/*`, `@apollo/server`) sits in
-  `devDependencies`; only `@nestjs/common` and `winston` are declared as peers. At runtime these
-  resolve from the **consumer's** `node_modules`, so a version bump here can silently disagree with
-  what the services install.
-- `axios` — imported by `error.helper.ts` and `graphql-auth-jwks.service.ts` — is not declared at all.
-  It only reaches `node_modules` because the single entry in `dependencies`, the deprecated
-  `@types/axios@0.14.0` stub, depends on `axios: "*"`.
+  `devDependencies`. The peers are `@nestjs/common` ^11, `@nestjs/graphql` ^13, `@nestjs/apollo` ^13,
+  `@apollo/server` ^5, `nest-winston` ^1.9.3, `winston` ^3, `graphql-type-json`, `ioredis`, `mongoose` 7/8 and
+  `reflect-metadata` 0.1/0.2, so this branch only fits consumers already on NestJS 11. At runtime `mongoose`,
+  `@nestjs/common`, `@nestjs/graphql`, `@apollo/server`, `winston`, `nest-winston`, `ioredis`,
+  `graphql-type-json` and `reflect-metadata` resolve from `node_modules/mind-api-helpers/node_modules` (the
+  nested copy installed by the `preinstall`); only `graphql` resolves from the consumer's root. That is why a
+  version bump here can silently disagree with what the services install.
+- `dependencies` holds only `axios`, `jsonwebtoken` and `jwk-to-pem` (exact pins). `axios` is imported by
+  `error.helper.ts` and `graphql-auth-jwks.service.ts`.
 - Releasing means bumping `version` in `package.json`, tagging the commit, and updating the `#tag` in
   each consuming repo. Branches are used as refs too (`#feature/to-error-helper`) while a change is
   being validated against a service.
@@ -118,6 +121,18 @@ token against a JWKS document fetched from `process.env.JWKS_URL` and cached in 
 router, the JWKS variant at the edge. On failure both return `undefined` instead of throwing, which
 leaves the resolvers with no context.
 
+On this branch both target NestJS 11, `@nestjs/graphql`/`@nestjs/apollo` 13 and Apollo Server 5. `@nestjs/apollo`
+13 loads `@as-integrations/express5` at runtime, so the consumer must have it installed. The JWKS service
+serves `/*splat/graphql` (Express 5 / path-to-regexp 8 syntax for the old `/*/graphql`). Both set
+`status400ForVariableCoercionErrors: false` (keep Apollo Server 4's 200 for variable coercion errors) and
+`resolverValidationOptions: { requireResolversToMatchSchema: 'ignore' }` (keep ignoring the `JSON` resolver when
+no field uses the scalar, as @nestjs/graphql 12 did).
+
+Known limitation of this branch: the federation `@link` is **not pinned**. Both services pass
+`autoSchemaFile: { federation: 2 }`, so the subgraph declares the @nestjs/graphql 13 default, `federation/v2.12`,
+which `mind-api-router`'s `@apollo/gateway` 2.4.x cannot compose ("Invalid version v2.12 for the federation
+feature"). A service behind the current router must not take this branch's code expecting composition to work.
+
 `mind-mongoose/helpers/query.helper.ts` translates the GraphQL input types from
 `mind-graphql/entities/query.entities.ts` into a Mongoose filter/options pair, so the two evolve
 together: a new `OperationEnum` member needs a matching `case` in `getQuery`, and a new
@@ -132,8 +147,8 @@ the GraphQL defaults (`limit: 10`, sort by `updatedAt` desc) when they are.
   English; the README is the one document written in pt-BR.
 - Prettier config is duplicated in `.prettierrc` and inline in `.eslintrc.js` — edit both.
   Single quotes, 120 columns, trailing commas, 2 spaces.
-- `build` runs plain `tsc`, which picks up `tsconfig.json`, **not** `tsconfig.build.json`. Spec files
-  are therefore compiled into `dist/`, and `tsconfig.build.json` is effectively dead config.
+- `build` runs `tsc -p tsconfig.build.json`, which extends `tsconfig.json` and excludes `**/*spec.ts`, so spec
+  files are not compiled into `dist/`.
 - The `lint` script's `src/**/*.ts` is expanded by bash with `globstar` off, i.e. it means `src/*/*.ts`.
   `src/index.ts`, `src/mind-graphql/entities/` and `src/mind-mongoose/` are silently **not linted**.
   Pass explicit paths to `eslint` when checking those.
@@ -141,5 +156,9 @@ the GraphQL defaults (`limit: 10`, sort by `updatedAt` desc) when they are.
   even though they would be in the consuming services.
 - Running the tests writes real log files to `logs/` (the "with the real winston logger" suite is
   intentionally not mocked); `logs/` is gitignored.
+- Never add `graphql` to `devDependencies`. The consumer's `preinstall` installs this package's devDependencies
+  nested under `node_modules/mind-api-helpers/node_modules`, and a second `graphql` copy there makes the
+  `@Field(() => Int)` input types in `query.entities.ts` unresolvable in the consumer ("Cannot determine a GraphQL
+  input type"). Specs stub `graphql-type-json` instead.
 - `test/` exists but is empty — specs live next to the code as `*.spec.ts`.
 - Dependabot opens PRs against `develop`; `master` is the release branch that carries the tags.
