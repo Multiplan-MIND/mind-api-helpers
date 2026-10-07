@@ -125,7 +125,7 @@ while true; do
             fi
 
             # Extrair changelog do corpo do PR
-            changelog_lines=$(printf '%s' "$pr_body" | tr -d '\r' | sed -n '/## Changelog:/,/^[[:space:]]*$/p' | grep '^- ')
+            changelog_lines=$(printf '%s\n' "$pr_body" | tr -d '\r' | sed -n '/## Changelog:/,/^## /p' | sed '1d;/^## /d' | grep '^- ')
 
             echo ""
             echo -e "${BLUE}Informações do PR #$pr_number:${NC}"
