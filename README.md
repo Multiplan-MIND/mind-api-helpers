@@ -27,8 +27,10 @@ O código em `src/` já está todo em inglês — mantenha assim.
 
 ## Requisitos
 
-- **Node v20.20.2**, a versão fixada no `.nvmrc` (a configuração de debug do VS Code aponta para esse
-  caminho exato dentro do `$NVM_DIR`).
+- **Node 24**, a versão do `.nvmrc` (`24`, a 24.x mais nova instalada no nvm). O `engines` do
+  `package.json` aceita `>=20.15.1`, sem limite superior. A configuração de debug do VS Code ainda aponta
+  para o caminho fixo `$NVM_DIR/versions/node/v20.20.2`, então ela só funciona com essa versão instalada
+  no nvm.
 - **yarn 1.x** (clássico) — o `yarn.lock` do repositório é v1.
 - Acesso de leitura à organização `Multiplan-MIND` no GitHub, já que a instalação é feita pela URL do
   git, não por um registry.
