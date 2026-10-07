@@ -14,9 +14,8 @@ it is re-exported there.
 
 ## Commands
 
-`.nvmrc` selects Node 24 (`24`, the newest 24.x installed in nvm) and the package manager is **yarn** (v1 /
-classic). Tests need Node >= 24.9: the NestJS 12 packages are ESM-only and Jest 30 can only `require()` them from
-that version on.
+Node is pinned by `.nvmrc` (v24.21.0) and the package manager is **yarn** (v1 / classic). Tests need Node >= 24.9:
+the NestJS 12 packages are ESM-only and Jest 30 can only `require()` them from that version on.
 
 ```bash
 nvm use                                   # required: Jest needs Node >= 24.9 (require(esm))
@@ -52,15 +51,14 @@ install cycle in `package.json` is for, and it is the reason the dependency layo
 Consequences to keep in mind when touching `package.json`:
 
 - Almost everything `src/` imports at **runtime** (`mongoose`, `ioredis`, `jsonwebtoken`, `jwk-to-pem`,
-  `graphql-type-json`, `winston`, `nest-winston`, `@nestjs/*`, `@apollo/server`) sits in
-  `devDependencies`. The peers are `@nestjs/common` ^12, `@nestjs/graphql` ^14, `@nestjs/apollo` ^14,
-  `@apollo/server` ^5, `nest-winston` ^2, `winston` ^3, `graphql-type-json`, `ioredis`, `mongoose` 7/8 and
-  `reflect-metadata` 0.1/0.2, so this branch only fits consumers already on NestJS 12. At runtime `mongoose`,
-  `@nestjs/common`, `@nestjs/graphql`, `@apollo/server`, `winston`, `nest-winston`, `ioredis`,
-  `graphql-type-json` and `reflect-metadata` resolve from `node_modules/mind-api-helpers/node_modules` (the
-  nested copy installed by the `preinstall`); only `graphql` resolves from the consumer's root. That is why a
-  version bump here can silently disagree with what the services install, and why the tsconfig `paths` entry
-  below exists.
+  `graphql-type-json`, `winston`, `nest-winston`, `@nestjs/*`, `@apollo/server`) sits in `devDependencies`. The
+  peers are `@nestjs/common` ^12, `@nestjs/graphql` ^14, `@nestjs/apollo` ^14, `@apollo/server` ^5, `nest-winston`
+  ^2, `winston` ^3, `graphql-type-json`, `ioredis`, `mongoose` 7/8/9, `reflect-metadata` 0.1/0.2 and
+  `@as-integrations/express5` ^1.1.2, so this branch only fits consumers already on NestJS 12. At runtime
+  `mongoose`, `@nestjs/common`, `@nestjs/graphql`, `@apollo/server`, `winston`, `nest-winston`, `ioredis`,
+  `graphql-type-json` and `reflect-metadata` resolve from `node_modules/mind-api-helpers/node_modules` (the nested
+  copy installed by the `preinstall`); only `graphql` resolves from the consumer's root. That is why a version bump
+  here can silently disagree with what the services install, and why the tsconfig `paths` entry below exists.
 - `dependencies` holds only `axios`, `jsonwebtoken` and `jwk-to-pem` (exact pins). `axios` is imported by
   `error.helper.ts` and `graphql-auth-jwks.service.ts`.
 - `engines.node` is `>=20.19.0`: NestJS 12 ships ESM only and CommonJS consumers load it through Node's
@@ -127,17 +125,18 @@ router, the JWKS variant at the edge. On failure both return `undefined` instead
 leaves the resolvers with no context.
 
 On this branch both target NestJS 12, `@nestjs/graphql`/`@nestjs/apollo` 14 and Apollo Server 5. `@nestjs/apollo`
-loads `@as-integrations/express5` at runtime, so the consumer must have it installed. The JWKS service
-serves `/*splat/graphql` (Express 5 / path-to-regexp 8 syntax for the old `/*/graphql`). Both set
-`status400ForVariableCoercionErrors: false` (keep Apollo Server 4's 200 for variable coercion errors) and
-`resolverValidationOptions: { requireResolversToMatchSchema: 'ignore' }` (keep ignoring the `JSON` resolver when
-no field uses the scalar, as @nestjs/graphql 12 did).
+loads `@as-integrations/express5` at runtime, so the consumer must have it installed (it is a peer, so a missing
+copy warns at install time). The JWKS service serves `/*splat/graphql` (Express 5 / path-to-regexp 8 syntax for the
+old `/*/graphql`). Both set `status400ForVariableCoercionErrors: false` (keep Apollo Server 4's 200 for variable
+coercion errors) and `resolverValidationOptions: { requireResolversToMatchSchema: 'ignore' }` (keep ignoring the
+`JSON` resolver when no field uses the scalar, as @nestjs/graphql 12 did).
 
-Both services take the federation `@link` from `MIND_FEDERATION_CONFIG` (`graphql-federation.config.ts`,
-re-exported by the barrel): `federation/v2.3` with the 11 directives NestJS 10 imported, in that order. The newer
-@nestjs/graphql defaults (v2.12 in 13, v2.14 in 14) are rejected by `mind-api-router`'s `@apollo/gateway` 2.4.x
-("Invalid version ... for the federation feature"); v2.3 composes. Raise the pin only together with the router's
-gateway; the specs assert the exact `@link` line.
+Both services take the federation `@link` from `MIND_FEDERATION_CONFIG` (`graphql-federation.config.ts`, re-exported
+by the barrel, frozen with `Object.freeze`): `federation/v2.3` with the 11 directives NestJS 10 imported, in that
+order. The newer @nestjs/graphql defaults (v2.12 in 13, v2.14 in 14) are rejected by `mind-api-router`'s
+`@apollo/gateway` 2.4.x ("Invalid version ... for the federation feature"); v2.3 composes. Raise the pin only
+together with the router's gateway; the specs assert the exact `@link` line through the shared
+`federation-link.spec-helper.ts` (`NEST_10_FEDERATION_LINK`, `federationLinkOf()`).
 
 Consumers on TypeScript 5.9 need a tsconfig `paths` entry. The install cycle leaves a second `@apollo/server`
 (and `@nestjs/*`) under `node_modules/mind-api-helpers/node_modules`. TS 5.9 does not merge the two copies
@@ -167,8 +166,9 @@ the GraphQL defaults (`limit: 10`, sort by `updatedAt` desc) when they are.
   English; the README is the one document written in pt-BR.
 - Prettier config is duplicated in `.prettierrc` and inline in `.eslintrc.js` — edit both.
   Single quotes, 120 columns, trailing commas, 2 spaces.
-- `build` runs `tsc -p tsconfig.build.json`, which extends `tsconfig.json` and excludes `**/*spec.ts`, so spec
-  files are not compiled into `dist/`.
+- `build` runs `tsc -p tsconfig.build.json`, which extends `tsconfig.json` and excludes `**/*spec.ts` and
+  `**/*.spec-helper.ts`, so spec files and spec helpers are not compiled into `dist/`. The `lint` scripts ignore
+  both patterns too.
 - The `lint` script's `src/**/*.ts` is expanded by bash with `globstar` off, i.e. it means `src/*/*.ts`.
   `src/index.ts`, `src/mind-graphql/entities/` and `src/mind-mongoose/` are silently **not linted**.
   Pass explicit paths to `eslint` when checking those.
