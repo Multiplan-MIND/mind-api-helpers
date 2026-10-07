@@ -27,9 +27,10 @@ O código em `src/` já está todo em inglês — mantenha assim.
 
 ## Requisitos
 
-- **Node 24**, a versão fixada no `.nvmrc` (a configuração de debug do VS Code usa a mesma versão via
-  `runtimeVersion`). Os testes precisam de Node 24.9 ou mais novo: os pacotes do NestJS 12 são só ESM e o
-  Jest 30 só consegue dar `require()` neles a partir dessa versão.
+- **Node 24**, fixado no `.nvmrc` em `v24.21.0`; a configuração de debug do VS Code usa Node 24 via
+  `runtimeVersion`. Os testes precisam de Node 24.9 ou mais novo: os pacotes do NestJS 12 são só ESM e o Jest 30 só
+  consegue dar `require()` neles a partir dessa versão. O `engines` do `package.json` (`>=20.19.0`) vale para quem
+  consome a biblioteca; ver [Dependências e ambientes](#dependências-e-ambientes).
 - **yarn 1.x** (clássico) — o `yarn.lock` do repositório é v1.
 - Acesso de leitura à organização `Multiplan-MIND` no GitHub, já que a instalação é feita pela URL do
   git, não por um registry.
@@ -54,12 +55,12 @@ biblioteca direto do git — sem esse ciclo, o consumidor receberia o pacote sem
 
 ## Scripts
 
-| Comando             | O que faz                                                            |
-| ------------------- | -------------------------------------------------------------------- |
-| `yarn build`        | `tsc` gerando `dist/` (o `prebuild` limpa a pasta com `rimraf`)      |
-| `yarn test`         | jest (com `--experimental-vm-modules`), config em `jest.config.json` |
-| `yarn lint`         | eslint; o prettier roda como regra do eslint                         |
-| `yarn lint-autofix` | o mesmo, com `--fix`                                                 |
+| Comando             | O que faz                                                                                           |
+| ------------------- | --------------------------------------------------------------------------------------------------- |
+| `yarn build`        | `tsc -p tsconfig.build.json` gerando `dist/` sem os specs (o `prebuild` limpa a pasta com `rimraf`) |
+| `yarn test`         | jest (com `--experimental-vm-modules`), configuração em `jest.config.json`                          |
+| `yarn lint`         | eslint; o prettier roda como regra do eslint                                                        |
+| `yarn lint-autofix` | o mesmo, com `--fix`                                                                                |
 
 ### Testes
 
@@ -74,10 +75,11 @@ yarn test --coverage
 ```
 
 O script `test` roda o Jest como `node --experimental-vm-modules ./node_modules/jest/bin/jest.js`. A flag é
-obrigatória desde a `1.10.0`: o NestJS 12 só publica ESM, e sem ela o Jest falha com
-`Must use import to load ES Module`. Ao chamar o Jest de outro jeito (`npx jest`, IDE), passe a flag também.
+obrigatória: o NestJS 12 só publica ESM, e sem ela o Jest falha com `Must use import to load ES Module`. Ao
+chamar o Jest de outro jeito (`npx jest`, IDE), passe a flag também.
 
-O VS Code tem a configuração de debug **"API Helpers - Jest"** em `.vscode/launch.json`.
+O VS Code tem a configuração de debug **"API Helpers - Jest"** em `.vscode/launch.json` (Node 24 via
+`runtimeVersion`, com a mesma flag em `runtimeArgs`).
 
 A suíte `with the real winston logger` roda com o winston de verdade, de propósito, então rodar os
 testes **escreve arquivos em `logs/`** (pasta ignorada pelo git).
@@ -157,22 +159,21 @@ Dois detalhes que costumam gerar dúvida:
 Ambas exigem que o serviço forneça um provider `REDIS_CLIENT` (um client `ioredis`) e, em caso de
 falha, retornam `undefined` em vez de lançar — os resolvers ficam sem contexto.
 
-A `1.10.0` é a versão publicada com NestJS 12, Apollo Server 5, Mongoose 7|8|9 e o `@link` de federação fixo em
-v2.3. As mudanças incompatíveis de peers e de engine saem como minor da linha 1.x porque o nome `2.0.0` já está
-ocupado pela linha do GitHub Packages. As duas exigem NestJS 12, `@nestjs/graphql`/`@nestjs/apollo` 14,
-`nest-winston` 2 e `@apollo/server` 5 (ver `peerDependencies`). O `@nestjs/apollo` carrega o
-`@as-integrations/express5` em tempo de execução, então o serviço precisa tê-lo instalado (ele é peer
-dependency, e a falta dele avisa na instalação). O serviço
-JWKS publica em `/*splat/graphql` (sintaxe do Express 5, equivalente ao antigo `/*/graphql`), e as
-duas mantêm o status 200 do Apollo 4 para erros de coerção de variáveis
+Nesta branch as duas exigem NestJS 12, `@nestjs/graphql`/`@nestjs/apollo` 14, `nest-winston` 2 e
+`@apollo/server` 5 (ver `peerDependencies`). O `@nestjs/apollo` carrega o `@as-integrations/express5` em
+tempo de execução, então o serviço precisa tê-lo instalado (ele é peer dependency, e a falta dele avisa na
+instalação). O serviço JWKS publica em `/*splat/graphql` (sintaxe do Express 5, equivalente ao antigo
+`/*/graphql`), e as duas mantêm o status 200 do Apollo 4 para erros de coerção de variáveis
 (`status400ForVariableCoercionErrors: false`) e, como o `@nestjs/graphql` 12, ignoram o resolver `JSON`
 quando nenhum campo usa esse scalar (`requireResolversToMatchSchema: 'ignore'`).
 
 O `@link` de federação que o subgraph declara fica fixo em `MIND_FEDERATION_CONFIG`
-(`src/mind-graphql/graphql-federation.config.ts`): `federation/v2.3` com as mesmas 11 diretivas que o
-NestJS 10 importava. Os padrões mais novos do `@nestjs/graphql` (v2.12 no 13, v2.14 no 14) não são
-compostos pelo `@apollo/gateway` 2.4.x do `mind-api-router`. Por isso a `1.10.0` fixa v2.3. Só
-suba essa versão junto com o gateway do router.
+(`src/mind-graphql/graphql-federation.config.ts`, exportado pelo _barrel_ e congelado com `Object.freeze`):
+`federation/v2.3` com as mesmas 11 diretivas que o NestJS 10 importava, na mesma ordem. Os padrões mais novos do
+`@nestjs/graphql` (v2.12 no 13, v2.14 no 14) não são compostos pelo `@apollo/gateway` 2.4.x do `mind-api-router`
+(`Invalid version ... for the federation feature`); a v2.3 é. Só suba essa versão junto com o gateway do router. Os
+specs dos dois serviços conferem a linha exata do `@link` gerado, com o helper compartilhado
+`src/mind-graphql/federation-link.spec-helper.ts` (fora do build e do lint, como os specs).
 
 **Serviços em TypeScript 5.9 precisam de um `paths` no `tsconfig.json`.** O ciclo de instalação desta
 biblioteca deixa uma segunda cópia do `@apollo/server` (e dos `@nestjs/*`) em
@@ -212,24 +213,28 @@ A chave pública fica em cache sob `JWKS_PUBLIC_KEY` por um dia.
 
 ## Dependências e ambientes
 
-Quase tudo o que o código importa em tempo de execução (`mongoose`, `ioredis`, `jsonwebtoken`,
-`jwk-to-pem`, `graphql-type-json`, `winston`, `nest-winston`, `@nestjs/*`, `@apollo/server`) está em
-`devDependencies`. As `peerDependencies` declaram o que o serviço precisa ter instalado: `@nestjs/common`
-^12, `@nestjs/graphql` ^14, `@nestjs/apollo` ^14, `@apollo/server` ^5, `nest-winston` ^2, `winston` ^3,
-`graphql-type-json`, `ioredis`, `mongoose` (7, 8 ou 9), `reflect-metadata` (0.1 ou 0.2) e `@as-integrations/express5`. Por causa dessas
-faixas, a `1.10.0` só serve para serviços já no NestJS 12. Na prática, `mongoose`, `@nestjs/common`,
-`@nestjs/graphql`, `@apollo/server`, `winston`, `nest-winston`, `ioredis`, `graphql-type-json` e
-`reflect-metadata` são resolvidos a partir de `node_modules/mind-api-helpers/node_modules` (a cópia aninhada
-instalada pelo build do `postinstall`); só o `graphql` é resolvido no `node_modules` da raiz do serviço. Por isso
-o serviço pode ter versões diferentes das que esta biblioteca usa, e por isso existe o `paths` do `tsconfig`
-descrito acima. Vale conferir o serviço antes de mexer nas versões.
+Quase tudo o que o código importa em tempo de execução (`mongoose`, `ioredis`, `jsonwebtoken`, `jwk-to-pem`,
+`graphql-type-json`, `winston`, `nest-winston`, `@nestjs/*`, `@apollo/server`) está em `devDependencies`. As
+`peerDependencies` declaram o que o serviço precisa ter instalado: `@nestjs/common` ^12, `@nestjs/graphql` ^14,
+`@nestjs/apollo` ^14, `@apollo/server` ^5, `nest-winston` ^2, `winston` ^3, `graphql-type-json`, `ioredis`,
+`mongoose` (7, 8 ou 9), `reflect-metadata` (0.1 ou 0.2) e `@as-integrations/express5` ^1.1.2. Por causa dessas
+faixas, esta branch só serve para serviços já no NestJS 12. Na prática, `mongoose`, `@nestjs/common`,
+`@nestjs/graphql`, `@apollo/server`, `winston`, `nest-winston`, `ioredis`, `graphql-type-json` e `reflect-metadata`
+são resolvidos a partir de `node_modules/mind-api-helpers/node_modules` (a cópia aninhada instalada pelo
+`preinstall`); só o `graphql` é resolvido no `node_modules` da raiz do serviço. Por isso o serviço pode ter versões
+diferentes das que esta biblioteca usa, e por isso existe o `paths` do `tsconfig` descrito acima. Vale conferir o
+serviço antes de mexer nas versões.
+
+Nunca adicione o `graphql` às `devDependencies`: uma segunda cópia dele dentro de
+`node_modules/mind-api-helpers/node_modules` faz o serviço falhar com `Cannot determine a GraphQL input type`
+nos _input types_ de `query.entities.ts`.
 
 As `dependencies` têm só `axios` (usado por `error.helper.ts` e pelo serviço JWKS), `jsonwebtoken` e
 `jwk-to-pem`, com versões exatas.
 
-O `engines.node` é `>=20.19.0` desde a `1.10.0`: o NestJS 12 só publica ESM, e um serviço CommonJS o carrega
-pelo `require(esm)` do Node, liberado sem flag a partir da 20.19. Para rodar os testes desta biblioteca é
-preciso Node 24.9 ou mais novo (Jest).
+O `engines.node` é `>=20.19.0`: o NestJS 12 só publica ESM, e um serviço CommonJS o carrega pelo
+`require(esm)` do Node, liberado sem flag a partir da 20.19. Para rodar os testes desta biblioteca é preciso
+Node 24.9 ou mais novo (Jest 30).
 
 ## Versionamento e publicação
 
