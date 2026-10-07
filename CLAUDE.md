@@ -14,10 +14,11 @@ it is re-exported there.
 
 ## Commands
 
-Node is pinned by `.nvmrc` (v20.20.2) and the package manager is **yarn** (v1 / classic).
+`.nvmrc` selects Node 24 (`24`, the newest 24.x installed in nvm), `engines.node` is `>=20.15.1` (no upper
+bound) and the package manager is **yarn** (v1 / classic).
 
 ```bash
-nvm use                                   # required: the lockfile and the launch.json path assume v20
+nvm use                                   # picks Node 24 from .nvmrc
 yarn install                              # see the install cycle warning below
 yarn build                                # tsc -> dist/ (prebuild wipes dist via rimraf)
 yarn lint                                 # eslint (prettier runs as an eslint rule)
@@ -28,7 +29,8 @@ yarn test -t 'should preserve subclasses' # one test by name
 ```
 
 There is no watch/coverage script; use `yarn test --watch` / `--coverage` directly. `.vscode/launch.json`
-provides an "API Helpers - Jest" debug configuration (hardcoded to `$NVM_DIR/versions/node/v20.20.2`).
+provides an "API Helpers - Jest" debug configuration, still hardcoded to `$NVM_DIR/versions/node/v20.20.2`
+(not the `.nvmrc` version), so it needs that exact Node installed in nvm.
 
 ## How this library is distributed
 
