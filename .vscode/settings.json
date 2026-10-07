@@ -3,18 +3,16 @@
   "editor.codeActionsOnSave": {
     "source.fixAll.eslint": "explicit"
   },
-  "eslint.validate": [
-    "javascript",
-    "typescript"
-  ],
+  "eslint.validate": ["javascript", "typescript"],
   "git.autofetch": true,
   "stylelint.config": null,
-  "stylelint.validate": [
-    "css",
-    "scss"
-  ],
+  "stylelint.validate": ["css", "scss"],
   "editor.defaultFormatter": "esbenp.prettier-vscode",
   "editor.formatOnSave": true,
   "files.insertFinalNewline": true,
-  "files.trimFinalNewlines": false
+  "files.trimFinalNewlines": false,
+  "sonarlint.connectedMode.project": {
+    "connectionId": "multiplan-mind",
+    "projectKey": "Multiplan-MIND_mind-api-helpers"
+  }
 }
