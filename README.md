@@ -160,14 +160,44 @@ GraphQLModule.forRootAsync<ApolloFederationDriverConfig>({
 });
 ```
 
+## Sessões e revogação
+
+Os dois serviços de GraphQL (`GraphqlAuthJwksService` e `GraphqlAuthGatewayService`) entendem sessões de
+usuário que podem ser revogadas antes de o token expirar.
+
+- **Claim `sid`** — o token JWT carrega o id da sessão no claim `sid`. O contexto de requisição o expõe
+  como `mindSessionId` (no gateway, vem do header `mind-session-id`).
+- **Chave de revogação** — uma sessão revogada é marcada no redis em `mind:session:revoked:<sid>`, com
+  valor `1` e TTL igual ao tempo que falta para a sessão expirar. A chave é global: leitura e escrita
+  ignoram o `REDIS_PREFIX` do serviço, então todos os serviços enxergam a mesma revogação. Os helpers
+  ficam em `src/mind-session/session.helper.ts` (`isSessionRevoked`, `markSessionRevoked`,
+  `markSessionsRevoked`).
+- **`SESSION_REQUIRE_SID`** — controla tokens legados, sem `sid`. Por padrão (`false`, a fase de
+  transição) o token é aceito com um aviso no log, já que essa sessão não pode ser revogada. Com
+  `SESSION_REQUIRE_SID=true` o token sem `sid` é rejeitado.
+- **Fail-closed** — para um token com `sid`, se a sessão estiver revogada **ou** o redis estiver
+  indisponível, a requisição é rejeitada (o contexto volta `undefined`). Não há "na dúvida, aceita".
+- **`mindRequestInfo`** — o contexto também traz `mindRequestInfo` (`ip`, `userAgent` e os headers
+  `acceptLanguage`, `acceptEncoding`, `secChUa`, `secChUaPlatform`, `secChUaMobile` e `xForwardedFor`).
+  O `ip` é o primeiro item de `X-Forwarded-For` ou, sem o header, o do socket. Fica disponível até em
+  requisições sem token.
+
+```ts
+import { sessionRevokedKey, markSessionRevoked, isSessionRevoked } from 'mind-api-helpers';
+
+await markSessionRevoked(redis, sid, ttlSeconds); // grava mind:session:revoked:<sid>
+await isSessionRevoked(redis, sid); // true enquanto a chave existir
+```
+
 ## Variáveis de ambiente
 
-A biblioteca lê apenas duas — quem as define é o serviço que a consome (ela não carrega `.env`):
+A biblioteca lê apenas três — quem as define é o serviço que a consome (ela não carrega `.env`):
 
-| Variável   | Efeito                                                                |
-| ---------- | --------------------------------------------------------------------- |
-| `DEBUG`    | qualquer valor definido sobe o nível do logger de `info` para `debug` |
-| `JWKS_URL` | endereço do documento JWKS usado pelo `GraphqlAuthJwksService`        |
+| Variável              | Efeito                                                                    |
+| --------------------- | ------------------------------------------------------------------------- |
+| `DEBUG`               | qualquer valor definido sobe o nível do logger de `info` para `debug`     |
+| `JWKS_URL`            | endereço do documento JWKS usado pelo `GraphqlAuthJwksService`            |
+| `SESSION_REQUIRE_SID` | `true` rejeita tokens sem `sid`; qualquer outro valor os aceita com aviso |
 
 O acesso ao redis não vem de variável: chega pelo provider `REDIS_CLIENT`, configurado no serviço.
 A chave pública fica em cache sob `JWKS_PUBLIC_KEY` por um dia.
