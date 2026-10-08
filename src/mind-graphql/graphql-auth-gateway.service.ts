@@ -8,6 +8,7 @@ import GraphQLJSON from 'graphql-type-json';
 import { MindLoggerService } from '../mind-logger/mind-logger.service';
 import { MindLogger } from '../mind-logger/mind-logger.decorator';
 import { logPrefix } from '../mind-logger/mind-logger.util';
+import { extractRequestInfo } from '../mind-session/request-info.helper';
 
 @Injectable()
 export class GraphqlAuthGatewayService implements GqlOptionsFactory<ApolloFederationDriverConfig> {
@@ -32,12 +33,19 @@ export class GraphqlAuthGatewayService implements GqlOptionsFactory<ApolloFedera
   private mindHandleContext({ req }) {
     const _log = logPrefix('mindHandleContext');
 
-    const ctx = { mindUserId: null, mindUserRoles: null, mindSessionExpiresIn: null };
+    const ctx = {
+      mindUserId: null,
+      mindUserRoles: null,
+      mindSessionExpiresIn: null,
+      mindSessionId: null,
+      mindRequestInfo: extractRequestInfo(req),
+    };
     try {
       if (req?.headers?.['mind-user-id']) {
         ctx.mindUserId = req?.headers?.['mind-user-id'];
         ctx.mindUserRoles = req?.headers?.['mind-user-roles'].split(',');
         ctx.mindSessionExpiresIn = new Date(req?.headers?.['mind-session-expires-in']);
+        ctx.mindSessionId = req?.headers?.['mind-session-id'] ?? null;
       }
     } catch (e) {
       this.logger.error('Error setting context', _log, e);

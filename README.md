@@ -160,14 +160,49 @@ GraphQLModule.forRootAsync<ApolloFederationDriverConfig>({
 });
 ```
 
+## Sessões e revogação
+
+O contexto dos dois serviços de GraphQL carrega o id da sessão (`mindSessionId`), mas só o
+`GraphqlAuthJwksService` **impõe** a revogação. O `GraphqlAuthGatewayService` não consulta o redis, não
+lê `SESSION_REQUIRE_SID` e não valida `sid`: ele apenas copia o header `mind-session-id` para
+`mindSessionId` (ou `null`, se ausente) e confia que o router à frente já rejeitou sessões revogadas.
+
+- **Claim `sid`** — o token JWT carrega o id da sessão no claim `sid`. O `GraphqlAuthJwksService` o expõe
+  como `mindSessionId` (`null` em token legado, sem `sid`).
+- **Chave de revogação** — uma sessão revogada é marcada no redis em `mind:session:revoked:<sid>`, com
+  valor `1` e TTL igual ao tempo que falta para a sessão expirar. A chave é global: leitura e escrita
+  ignoram o `REDIS_PREFIX` do serviço, então todos os serviços enxergam a mesma revogação. Os helpers
+  ficam em `src/mind-session/session.helper.ts` (`isSessionRevoked`, `markSessionRevoked` e
+  `markSessionsRevoked`, esta última para revogar várias sessões de uma vez).
+- **`SESSION_REQUIRE_SID`** (só `GraphqlAuthJwksService`) — controla tokens legados, sem `sid`. Por
+  padrão (`false`, a fase de transição) o token é aceito com um aviso no log, já que essa sessão não
+  pode ser revogada. Com `SESSION_REQUIRE_SID=true` (ou `1`, sem diferenciar maiúsculas e ignorando espaços nas pontas) o token sem `sid` é rejeitado; qualquer outro valor mantém o modo tolerante.
+- **Fail-closed** (só `GraphqlAuthJwksService`) — para um token com `sid`, se a sessão estiver revogada
+  **ou** o redis estiver indisponível, a requisição é rejeitada (o contexto volta `undefined`). Não há
+  "na dúvida, aceita".
+- **`mindRequestInfo`** — os dois serviços também colocam `mindRequestInfo` no contexto (`ip`,
+  `userAgent` e os headers `acceptLanguage`, `acceptEncoding`, `secChUa`, `secChUaPlatform`,
+  `secChUaMobile` e `xForwardedFor`). O `ip` é o primeiro item de `X-Forwarded-For`; sem o header (ou
+  com ele vazio), cai em `req.ip` e depois em `req.socket.remoteAddress`. Ele existe quando não há
+  header `Authorization` ou quando o token é aceito; o contexto inteiro é `undefined` quando o token
+  falha na verificação, a sessão está revogada ou o redis falha.
+
+```ts
+import { isSessionRevoked, markSessionRevoked } from 'mind-api-helpers';
+
+await markSessionRevoked(redis, sid, ttlSeconds); // grava mind:session:revoked:<sid>
+await isSessionRevoked(redis, sid); // true enquanto a chave existir
+```
+
 ## Variáveis de ambiente
 
-A biblioteca lê apenas duas — quem as define é o serviço que a consome (ela não carrega `.env`):
+A biblioteca lê apenas três — quem as define é o serviço que a consome (ela não carrega `.env`):
 
-| Variável   | Efeito                                                                |
-| ---------- | --------------------------------------------------------------------- |
-| `DEBUG`    | qualquer valor definido sobe o nível do logger de `info` para `debug` |
-| `JWKS_URL` | endereço do documento JWKS usado pelo `GraphqlAuthJwksService`        |
+| Variável              | Efeito                                                                    |
+| --------------------- | ------------------------------------------------------------------------- |
+| `DEBUG`               | qualquer valor definido sobe o nível do logger de `info` para `debug`     |
+| `JWKS_URL`            | endereço do documento JWKS usado pelo `GraphqlAuthJwksService`            |
+| `SESSION_REQUIRE_SID` | `true` ou `1` (sem diferenciar maiúsculas, com trim) rejeita tokens sem `sid`; qualquer outro valor os aceita com aviso |
 
 O acesso ao redis não vem de variável: chega pelo provider `REDIS_CLIENT`, configurado no serviço.
 A chave pública fica em cache sob `JWKS_PUBLIC_KEY` por um dia.
