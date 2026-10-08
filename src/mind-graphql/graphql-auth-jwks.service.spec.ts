@@ -53,6 +53,9 @@ describe('GraphqlAuthJwksService', () => {
   it('should return an empty identity for a non-Bearer or empty token', async () => {
     const ctx = await context({ req: { headers: { authorization: 'Bearer ' } } });
     expect(ctx.mindUserId).toBeNull();
+
+    const basic = await context({ req: { headers: { authorization: 'Basic x' } } });
+    expect(basic.mindUserId).toBeNull();
   });
 
   it('should fill the identity and session id for a valid token with sid', async () => {
@@ -71,6 +74,8 @@ describe('GraphqlAuthJwksService', () => {
     const token = signToken(keys, validPayload({ sid: 'sess-1' }));
 
     await expect(context({ req: reqWith(token) })).resolves.toBeUndefined();
+    expect(redis.eval).toHaveBeenCalled();
+    expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('Session revoked'), expect.any(String));
   });
 
   it('should fail closed when Redis fails during the revocation check', async () => {
@@ -125,6 +130,11 @@ describe('GraphqlAuthJwksService', () => {
         keyid: 'kid-1',
       });
       await expect(context({ req: reqWith(forged) })).resolves.toBeUndefined();
+    });
+
+    it('should reject a validly signed token whose algorithm is not RS256', async () => {
+      const token = signToken(keys, validPayload({ sid: 's' }), { algorithm: 'RS384' });
+      await expect(context({ req: reqWith(token) })).resolves.toBeUndefined();
     });
 
     it('should return an empty identity when mindSessionExpiresIn is in the past', async () => {
