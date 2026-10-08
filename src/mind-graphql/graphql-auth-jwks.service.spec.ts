@@ -1,5 +1,6 @@
 import axios from 'axios';
 import * as jwkToPem from 'jwk-to-pem';
+import * as jwt from 'jsonwebtoken';
 
 import { GraphqlAuthJwksService } from './graphql-auth-jwks.service';
 import { RsaKeys, createLoggerMock, createRedisMock, createRsaKeys, signToken } from './jwt.test-support';
@@ -111,6 +112,20 @@ describe('GraphqlAuthJwksService', () => {
 
       await expect(context({ req: reqWith(token) })).resolves.toBeUndefined();
     });
+
+    it.each(['TRUE', 'True', '1', ' true '])('should reject when SESSION_REQUIRE_SID is %j', async (value) => {
+      process.env.SESSION_REQUIRE_SID = value;
+      const token = signToken(keys, validPayload());
+
+      await expect(context({ req: reqWith(token) })).resolves.toBeUndefined();
+    });
+
+    it.each(['false', '0', '', 'yes'])('should stay lenient when SESSION_REQUIRE_SID is %j', async (value) => {
+      process.env.SESSION_REQUIRE_SID = value;
+      const token = signToken(keys, validPayload());
+
+      expect((await context({ req: reqWith(token) })).mindUserId).toBe('u1');
+    });
   });
 
   describe('token validation', () => {
@@ -124,7 +139,6 @@ describe('GraphqlAuthJwksService', () => {
     });
 
     it('should reject a token signed with an unexpected algorithm (HS256 with the public PEM)', async () => {
-      const jwt = require('jsonwebtoken');
       const forged = jwt.sign(validPayload({ sid: 's' }), jwkToPem(keys.jwk as any), {
         algorithm: 'HS256',
         keyid: 'kid-1',

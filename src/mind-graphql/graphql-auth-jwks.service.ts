@@ -101,10 +101,10 @@ export class GraphqlAuthJwksService implements GqlOptionsFactory<ApolloFederatio
   }
 
   // Token with `sid`: checks the global revocation key (fail-closed if Redis fails).
-  // Legacy token without `sid`: accepted during the transition, unless SESSION_REQUIRE_SID=true.
+  // Legacy token without `sid`: accepted during the transition, unless SESSION_REQUIRE_SID is true/1 (case-insensitive, trimmed).
   private async isSessionAllowed(sid: string | undefined, _log: string): Promise<boolean> {
     if (!sid) {
-      if (process.env.SESSION_REQUIRE_SID === 'true') {
+      if (/^(true|1)$/i.test((process.env.SESSION_REQUIRE_SID ?? '').trim())) {
         this.logger.error('Token without session id (sid) rejected', _log);
         return false;
       }

@@ -176,7 +176,7 @@ lê `SESSION_REQUIRE_SID` e não valida `sid`: ele apenas copia o header `mind-s
   `markSessionsRevoked`, esta última para revogar várias sessões de uma vez).
 - **`SESSION_REQUIRE_SID`** (só `GraphqlAuthJwksService`) — controla tokens legados, sem `sid`. Por
   padrão (`false`, a fase de transição) o token é aceito com um aviso no log, já que essa sessão não
-  pode ser revogada. Com `SESSION_REQUIRE_SID=true` o token sem `sid` é rejeitado.
+  pode ser revogada. Com `SESSION_REQUIRE_SID=true` (ou `1`, sem diferenciar maiúsculas e ignorando espaços nas pontas) o token sem `sid` é rejeitado; qualquer outro valor mantém o modo tolerante.
 - **Fail-closed** (só `GraphqlAuthJwksService`) — para um token com `sid`, se a sessão estiver revogada
   **ou** o redis estiver indisponível, a requisição é rejeitada (o contexto volta `undefined`). Não há
   "na dúvida, aceita".
@@ -202,7 +202,7 @@ A biblioteca lê apenas três — quem as define é o serviço que a consome (el
 | --------------------- | ------------------------------------------------------------------------- |
 | `DEBUG`               | qualquer valor definido sobe o nível do logger de `info` para `debug`     |
 | `JWKS_URL`            | endereço do documento JWKS usado pelo `GraphqlAuthJwksService`            |
-| `SESSION_REQUIRE_SID` | `true` rejeita tokens sem `sid`; qualquer outro valor os aceita com aviso |
+| `SESSION_REQUIRE_SID` | `true` ou `1` (sem diferenciar maiúsculas, com trim) rejeita tokens sem `sid`; qualquer outro valor os aceita com aviso |
 
 O acesso ao redis não vem de variável: chega pelo provider `REDIS_CLIENT`, configurado no serviço.
 A chave pública fica em cache sob `JWKS_PUBLIC_KEY` por um dia.
