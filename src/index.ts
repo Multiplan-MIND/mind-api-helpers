@@ -11,3 +11,4 @@ export * from './mind-logger/mind-logger.service';
 export * from './mind-logger/mind-logger.util';
 export * from './mind-mongoose/helpers/query.helper';
 export * from './mind-session/session.helper';
+export * from './mind-session/request-info.helper';
