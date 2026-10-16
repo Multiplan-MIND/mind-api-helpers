@@ -21,26 +21,30 @@ const mtsLoggerFormat = format.printf(({ context, level, message, timestamp, ms,
 });
 
 export const MindLoggerFactory = (module: string): LoggerService => {
-  const consoleFormat = format.combine(
-    format.timestamp(),
-    format.ms(),
-    format.colorize(),
-    format.prettyPrint(),
-    mtsLoggerFormat,
-  );
-  const fileFormat = format.combine(format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }), format.ms(), mtsLoggerFormat);
+  const timestamp = format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' });
+  // Cor só com terminal (desenvolvimento): no pod o stdout vai para o coletor de log, que não deve receber códigos ANSI.
+  const colorize = process.stdout.isTTY ? [format.colorize()] : [];
+  const consoleFormat = format.combine(timestamp, format.ms(), ...colorize, format.prettyPrint(), mtsLoggerFormat);
+  const fileFormat = format.combine(timestamp, format.ms(), mtsLoggerFormat);
+
+  // O Kubernetes injeta essa variável em todo pod. Lá o coletor lê o stdout, e o arquivo só ocuparia o disco do nó.
+  const inKubernetes = !!process.env.KUBERNETES_SERVICE_HOST;
 
   return WinstonModule.createLogger({
     level: process.env.DEBUG ? 'debug' : 'info',
     transports: [
       new transports.Console({ format: consoleFormat }),
-      new transports.File({
-        filename: `logs/${module}.log`,
-        format: fileFormat,
-        maxsize: 1024 * 1000 * 200, // 204,8mb
-        maxFiles: 1,
-        tailable: true,
-      }),
+      ...(inKubernetes
+        ? []
+        : [
+            new transports.File({
+              filename: `logs/${module}.log`,
+              format: fileFormat,
+              maxsize: 1024 * 1000 * 200, // 204,8mb
+              maxFiles: 1,
+              tailable: true,
+            }),
+          ]),
     ],
   });
 };
