@@ -7,7 +7,7 @@
       "name": "API Helpers - Jest",
       "program": "${workspaceRoot}/node_modules/jest/bin/jest.js",
       "args": ["--verbose", "-i", "--no-cache"],
-      "runtimeVersion": "24",
+      "runtimeVersion": "24.22.1",
       "runtimeArgs": ["--experimental-vm-modules"],
       "sourceMaps": true,
       "cwd": "${workspaceRoot}",

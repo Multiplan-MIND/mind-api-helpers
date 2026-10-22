@@ -27,10 +27,11 @@ O código em `src/` já está todo em inglês — mantenha assim.
 
 ## Requisitos
 
-- **Node 24**, fixado no `.nvmrc` em `v24.21.0`; a configuração de debug do VS Code usa Node 24 via
+- **Node 24**, fixado no `.nvmrc` em `v24.22.1`; a configuração de debug do VS Code usa Node 24 via
   `runtimeVersion`. Os testes precisam de Node 24.9 ou mais novo: os pacotes do NestJS 12 são só ESM e o Jest 30 só
   consegue dar `require()` neles a partir dessa versão. O `engines` do `package.json` (`>=24`) vale para quem
-  consome a biblioteca; ver [Dependências e ambientes](#dependências-e-ambientes).
+  consome a biblioteca; ver [Dependências e ambientes](#dependências-e-ambientes). A 2.x exige Node 24;
+  os serviços que ainda não migraram continuam na tag 1.x.
 - **yarn 1.x** (clássico) — o `yarn.lock` do repositório é v1.
 - Acesso de leitura à organização `Multiplan-MIND` no GitHub, já que a instalação é feita pela URL do
   git, não por um registry.
@@ -168,8 +169,9 @@ coerção de variáveis respondem 400, o padrão do Apollo Server 5. O resolver 
 `requireResolversToMatchSchema` é `'warn'`: um serviço sem nenhum campo `JSON` recebe um aviso no boot em
 vez de falhar. Nas duas, `mindSessionExpiresIn` é um `Date`.
 
-O `@link` de federação que o subgraph declara fica fixo em `MIND_FEDERATION_CONFIG`
-(`src/mind-graphql/graphql-federation.config.ts`, exportado pelo _barrel_ e congelado com `Object.freeze`):
+O `@link` de federação que o subgraph declara fica fixo em `getMindFederationConfig()`
+(`getMindFederationConfig()` em `src/mind-graphql/graphql-federation.config.ts`, exportada pelo _barrel_; devolve
+uma cópia nova a cada chamada):
 `federation/v2.3` com as mesmas 11 diretivas que o NestJS 10 importava, na mesma ordem. Os padrões mais novos do
 `@nestjs/graphql` (v2.12 no 13, v2.14 no 14) não são compostos pelo `@apollo/gateway` 2.4.x do `mind-api-router`
 (`Invalid version ... for the federation feature`); a v2.3 é. Só suba essa versão junto com o gateway do router. Os
@@ -177,8 +179,8 @@ specs dos dois serviços conferem a linha exata do `@link` gerado, com o helper 
 `src/mind-graphql/graphql-auth.spec-helper.ts` (fora do build e do lint, como os specs).
 
 O pin só vale para quem usa estes serviços: **todo subgraph atrás do router deve usar o
-`MIND_FEDERATION_CONFIG`**, inclusive o serviço que monta o `GraphQLModule` direto, com
-`autoSchemaFile: { federation: MIND_FEDERATION_CONFIG }`. Com `federation: 2`, o subgraph publica o padrão do
+`getMindFederationConfig()`**, inclusive o serviço que monta o `GraphQLModule` direto, com
+`autoSchemaFile: { federation: getMindFederationConfig() }`. Com `federation: 2`, o subgraph publica o padrão do
 `@nestjs/graphql` 14 (`federation/v2.14`) e a composição no router falha. Os specs da biblioteca conferem o
 decorator do `@link`, não o SDL publicado: para esse, consulte `{ _service { sdl } }` no serviço. Enquanto o
 `@apollo/gateway` do router não subir, as diretivas mais novas da federação (`@authenticated`,
@@ -226,7 +228,7 @@ Quase tudo o que o código importa em tempo de execução (`mongoose`, `ioredis`
 `graphql-type-json`, `winston`, `nest-winston`, `@nestjs/*`, `@apollo/server`) está em
 `devDependencies`. As `peerDependencies` declaram o que o serviço precisa ter instalado: `@nestjs/common`
 ^12, `@nestjs/graphql` ^14, `@nestjs/apollo` ^14, `@apollo/server` ^5, `graphql` ^16.11, `nest-winston` ^2,
-`winston` ^3, `graphql-type-json`, `ioredis`, `mongoose` (7, 8 ou 9), `reflect-metadata` (0.1 ou 0.2) e
+`winston` ^3, `graphql-type-json`, `ioredis`, `mongoose` ^9, `reflect-metadata` (0.1 ou 0.2) e
 `@as-integrations/express5` ^1.1.2. Por causa dessas faixas, a biblioteca só serve para serviços já no NestJS 12.
 Na prática, `mongoose`, `@nestjs/common`,
 `@nestjs/graphql`, `@apollo/server`, `winston`, `nest-winston`, `ioredis`, `graphql-type-json` e
@@ -234,6 +236,11 @@ Na prática, `mongoose`, `@nestjs/common`,
 instalada pelo `preinstall`); só o `graphql` é resolvido no `node_modules` da raiz do serviço. Por isso o
 serviço pode ter versões diferentes das que esta biblioteca usa, e por isso existe o `paths` do `tsconfig`
 descrito acima. Vale conferir o serviço antes de mexer nas versões.
+
+**O Mongoose do serviço precisa estar na mesma major da biblioteca (hoje, a 9).** O `getQuery` cria os `ObjectId`
+com o `mongoose` aninhado da própria biblioteca, e o driver do serviço recusa tipos de outra major do bson
+(`BSONVersionError: Unsupported BSON version`). Por isso o peer é `^9.0.0` e não uma faixa de várias majors: a cada
+major nova do Mongoose a biblioteca precisa de uma major própria, ou a falha volta, sem aviso na instalação.
 
 Nunca adicione o `graphql` às `devDependencies`: uma segunda cópia dele dentro de
 `node_modules/mind-api-helpers/node_modules` faz o serviço falhar com `Cannot determine a GraphQL input type`

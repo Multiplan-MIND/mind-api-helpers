@@ -1,7 +1,7 @@
 import GraphQLJSON from 'graphql-type-json';
 
 import { GraphqlAuthGatewayService } from './graphql-auth-gateway.service';
-import { MIND_FEDERATION_CONFIG } from './graphql-federation.config';
+import { getMindFederationConfig } from './graphql-federation.config';
 import {
   createLoggerMock,
   EMPTY_IDENTITY,
@@ -28,7 +28,7 @@ describe('GraphqlAuthGatewayService', () => {
       const options = await service.createGqlOptions();
 
       expect(options).toMatchObject({
-        autoSchemaFile: { path: 'schema.gql', federation: MIND_FEDERATION_CONFIG },
+        autoSchemaFile: { path: 'schema.gql', federation: getMindFederationConfig() },
         sortSchema: true,
         playground: false,
         resolvers: { JSON: GraphQLJSON },

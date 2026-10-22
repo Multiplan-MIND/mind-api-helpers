@@ -14,7 +14,7 @@ it is re-exported there.
 
 ## Commands
 
-Node is pinned by `.nvmrc` (v24.21.0), `engines.node` is `>=24` (no upper bound) and the package manager is
+Node is pinned by `.nvmrc` (v24.22.1), `engines.node` is `>=24` (no upper bound) and the package manager is
 **yarn** (v1 / classic). Tests need Node >= 24.9: the NestJS 12 packages are ESM-only and Jest 30 can only
 `require()` them from that version on.
 
@@ -55,13 +55,15 @@ Consequences to keep in mind when touching `package.json`:
   `graphql-type-json`, `winston`, `nest-winston`, `@nestjs/*`, `@apollo/server`) sits in
   `devDependencies`. The peers are `@nestjs/common` ^12, `@nestjs/graphql` ^14, `@nestjs/apollo` ^14,
   `@apollo/server` ^5, `graphql` ^16.11, `nest-winston` ^2, `winston` ^3, `graphql-type-json`, `ioredis`,
-  `mongoose` 7/8/9, `reflect-metadata` 0.1/0.2 and `@as-integrations/express5` ^1.1.2, so it only fits consumers
+  `mongoose` ^9, `reflect-metadata` 0.1/0.2 and `@as-integrations/express5` ^1.1.2, so it only fits consumers
   already on NestJS 12. At runtime `mongoose`,
   `@nestjs/common`, `@nestjs/graphql`, `@apollo/server`, `winston`, `nest-winston`, `ioredis`,
   `graphql-type-json` and `reflect-metadata` resolve from `node_modules/mind-api-helpers/node_modules` (the
   nested copy installed by the `preinstall`); only `graphql` resolves from the consumer's root. That is why a
   version bump here can silently disagree with what the services install, and why the tsconfig `paths` entry
   below exists.
+- The peer `mongoose` is a single major (^9) on purpose: `getQuery` builds `ObjectId`s with the nested `mongoose`, and a
+  service on another bson major fails with `BSONVersionError`. A new Mongoose major needs a new major of this library.
 - `dependencies` holds only `axios`, `jsonwebtoken` and `jwk-to-pem` (exact pins). `axios` is imported by
   `error.helper.ts` and `graphql-auth-jwks.service.ts`.
 - `engines.node` is `>=24`: the library and its consuming services move to Node 24 together. NestJS 12 ships ESM
@@ -131,7 +133,7 @@ leaves the resolvers with no context.
 Both share their options through `buildMindGqlOptions` (`graphql-options.builder.ts`); a service only adds its
 `context` (and the JWKS one its `path`), so a compatibility option is changed there, once. Required versions, the
 Express 5 path, the `'warn'` resolver validation, the `Date` type of `mindSessionExpiresIn`, the federation `@link`
-pinned in `MIND_FEDERATION_CONFIG` (`graphql-federation.config.ts`) and the consumer `paths` workaround for
+pinned by `getMindFederationConfig()` (`graphql-federation.config.ts`) and the consumer `paths` workaround for
 TypeScript 5.9 are documented in the README ("GraphQL" section), not repeated here.
 
 `mind-mongoose/helpers/query.helper.ts` translates the GraphQL input types from
