@@ -154,18 +154,14 @@ Dois detalhes que costumam gerar dúvida:
 Ambas exigem que o serviço forneça um provider `REDIS_CLIENT` (um client `ioredis`) e, em caso de
 falha, retornam `undefined` em vez de lançar — os resolvers ficam sem contexto.
 
-Nesta branch as duas exigem NestJS 11, `@nestjs/graphql`/`@nestjs/apollo` 13 e `@apollo/server` 5
-(ver `peerDependencies`). O `@nestjs/apollo` 13 carrega o `@as-integrations/express5` em tempo de
-execução, então o serviço precisa tê-lo instalado. O serviço JWKS publica em `/*splat/graphql` (sintaxe
-do Express 5, equivalente ao antigo `/*/graphql`), e as duas mantêm o status 200 do Apollo 4 para erros
-de coerção de variáveis (`status400ForVariableCoercionErrors: false`) e, como o `@nestjs/graphql` 12,
-ignoram o resolver `JSON` quando nenhum campo usa esse scalar (`requireResolversToMatchSchema: 'ignore'`).
-
-**Limitação conhecida desta branch: o `@link` de federação não está fixado.** As duas usam
-`autoSchemaFile: { federation: 2 }`, então o subgraph declara o padrão do `@nestjs/graphql` 13,
-`federation/v2.12`. O `@apollo/gateway` 2.4.x do `mind-api-router` não compõe essa versão
-(`Invalid version v2.12 for the federation feature`). Um serviço atrás do router atual não deve usar o
-código desta branch esperando que a composição funcione.
+As duas exigem NestJS 11, `@nestjs/graphql`/`@nestjs/apollo` 13 e `@apollo/server` 5 (ver
+`peerDependencies`) e compartilham as opções montadas por `buildMindGqlOptions`
+(`graphql-options.builder.ts`); cada serviço só define o `context` (e o JWKS, o `path`). O
+`@nestjs/apollo` 13 carrega o `@as-integrations/express5` em tempo de execução, então o serviço precisa
+tê-lo instalado. O serviço JWKS publica em `/*splat/graphql` (o Express 5 exige curinga nomeado). Erros de
+coerção de variáveis respondem 400, o padrão do Apollo Server 5. O resolver `JSON` é sempre registrado, e
+`requireResolversToMatchSchema` é `'warn'`: um serviço sem nenhum campo `JSON` recebe um aviso no boot em
+vez de falhar. Nas duas, `mindSessionExpiresIn` é um `Date`.
 
 ```ts
 GraphQLModule.forRootAsync<ApolloFederationDriverConfig>({
@@ -174,6 +170,12 @@ GraphQLModule.forRootAsync<ApolloFederationDriverConfig>({
   useClass: process.env.GRAPHQL_SERVICE === 'jwks' ? GraphqlAuthJwksService : GraphqlAuthGatewayService,
 });
 ```
+
+**Limitação conhecida desta branch: o `@link` de federação não está fixado.** As duas usam
+`autoSchemaFile: { federation: 2 }`, então o subgraph declara o padrão do `@nestjs/graphql` 13,
+`federation/v2.12`. O `@apollo/gateway` 2.4.x do `mind-api-router` não compõe essa versão
+(`Invalid version v2.12 for the federation feature`). Um serviço atrás do router atual não deve usar o
+código desta branch esperando que a composição funcione.
 
 ## Variáveis de ambiente
 
@@ -189,12 +191,12 @@ A chave pública fica em cache sob `JWKS_PUBLIC_KEY` por um dia.
 
 ## Dependências e ambientes
 
-Quase tudo o que o código importa em tempo de execução (`mongoose`, `ioredis`, `jsonwebtoken`,
-`jwk-to-pem`, `graphql-type-json`, `winston`, `nest-winston`, `@nestjs/*`, `@apollo/server`) está em
+Quase tudo o que o código importa em tempo de execução (`mongoose`, `ioredis`,
+`graphql-type-json`, `winston`, `nest-winston`, `@nestjs/*`, `@apollo/server`) está em
 `devDependencies`. As `peerDependencies` declaram o que o serviço precisa ter instalado: `@nestjs/common`
-^11, `@nestjs/graphql` ^13, `@nestjs/apollo` ^13, `@apollo/server` ^5, `nest-winston` ^1.9.3, `winston` ^3,
-`graphql-type-json`, `ioredis`, `mongoose` (7 ou 8) e `reflect-metadata` (0.1 ou 0.2). Por causa dessas
-faixas, esta branch só serve para serviços já no NestJS 11. Na prática, `mongoose`, `@nestjs/common`,
+^11, `@nestjs/graphql` ^13, `@nestjs/apollo` ^13, `@apollo/server` ^5, `graphql` ^16.11, `nest-winston` ^1.9.3,
+`winston` ^3, `graphql-type-json`, `ioredis`, `mongoose` (7 ou 8) e `reflect-metadata` (0.1 ou 0.2). Por causa dessas
+faixas, a biblioteca só serve para serviços já no NestJS 11. Na prática, `mongoose`, `@nestjs/common`,
 `@nestjs/graphql`, `@apollo/server`, `winston`, `nest-winston`, `ioredis`, `graphql-type-json` e
 `reflect-metadata` são resolvidos a partir de `node_modules/mind-api-helpers/node_modules` (a cópia aninhada
 instalada pelo `preinstall`); só o `graphql` é resolvido no `node_modules` da raiz do serviço. Por isso o

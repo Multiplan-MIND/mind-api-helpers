@@ -5,13 +5,11 @@ import { pathToRegexp } from 'path-to-regexp';
 import GraphQLJSON from 'graphql-type-json';
 
 import { GraphqlAuthJwksService } from './graphql-auth-jwks.service';
+import { createLoggerMock, EMPTY_IDENTITY, LoggerMock, resolveContext } from './graphql-auth.spec-helper';
 
 jest.mock('axios');
-// `graphql` is deliberately not a devDependency: consumers install this package with its devDependencies nested,
-// and a second `graphql` copy there breaks their schema (`Int` from another realm). Stub the scalar instead.
+// Stubs the scalar instead of installing `graphql`; see graphql-auth.spec-helper.ts for the reason
 jest.mock('graphql-type-json', () => ({ __esModule: true, default: { name: 'JSON' } }));
-
-type LoggerMock = { debug: jest.Mock; error: jest.Mock };
 type RedisMock = { get: jest.Mock; set: jest.Mock };
 
 describe('GraphqlAuthJwksService', () => {
@@ -19,24 +17,22 @@ describe('GraphqlAuthJwksService', () => {
   let privateKey: KeyObject;
   let publicKey: KeyObject;
   let publicPem: string;
+  let otherPrivateKey: KeyObject;
 
   let logger: LoggerMock;
   let redis: RedisMock;
   let service: GraphqlAuthJwksService;
 
   const sign = (payload: object) => jwt.sign(payload, privateKey, { algorithm: 'RS256', keyid: kid });
-  const resolveContext = async (headers: Record<string, string>) => {
-    const options = await service.createGqlOptions();
-    return (options.context as (arg: unknown) => Promise<unknown>)({ req: { headers } });
-  };
 
   beforeAll(() => {
     ({ privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 }));
     publicPem = publicKey.export({ type: 'spki', format: 'pem' }).toString();
+    ({ privateKey: otherPrivateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 }));
   });
 
   beforeEach(() => {
-    logger = { debug: jest.fn(), error: jest.fn() };
+    logger = createLoggerMock();
     redis = { get: jest.fn().mockResolvedValue(publicPem), set: jest.fn().mockResolvedValue('OK') };
     service = new GraphqlAuthJwksService(logger as any, redis as any);
     jest.mocked(axios.get).mockReset();
@@ -51,9 +47,8 @@ describe('GraphqlAuthJwksService', () => {
         autoSchemaFile: { path: 'schema.gql', federation: 2 },
         sortSchema: true,
         playground: false,
-        status400ForVariableCoercionErrors: false,
         resolvers: { JSON: GraphQLJSON },
-        resolverValidationOptions: { requireResolversToMatchSchema: 'ignore' },
+        resolverValidationOptions: { requireResolversToMatchSchema: 'warn' },
       });
       expect(options.plugins).toHaveLength(1);
       expect(options.context).toEqual(expect.any(Function));
@@ -73,21 +68,17 @@ describe('GraphqlAuthJwksService', () => {
     const future = () => new Date(Date.now() + 60 * 60 * 1000).toISOString();
 
     it('should return an empty identity when there is no authorization header', async () => {
-      await expect(resolveContext({})).resolves.toEqual({
-        mindUserId: null,
-        mindUserRoles: null,
-        mindSessionExpiresIn: null,
-      });
+      await expect(resolveContext(service, {})).resolves.toEqual(EMPTY_IDENTITY);
     });
 
     it('should fill the identity from a valid token whose session is still open', async () => {
       const mindSessionExpiresIn = future();
       const token = sign({ mindUserId: 'user-1', mindUserRoles: ['admin'], mindSessionExpiresIn });
 
-      await expect(resolveContext({ authorization: `Bearer ${token}` })).resolves.toEqual({
+      await expect(resolveContext(service, { authorization: `Bearer ${token}` })).resolves.toEqual({
         mindUserId: 'user-1',
         mindUserRoles: ['admin'],
-        mindSessionExpiresIn,
+        mindSessionExpiresIn: new Date(mindSessionExpiresIn),
       });
       expect(redis.get).toHaveBeenCalledWith('JWKS_PUBLIC_KEY');
       expect(axios.get).not.toHaveBeenCalled();
@@ -100,11 +91,7 @@ describe('GraphqlAuthJwksService', () => {
         mindSessionExpiresIn: '2000-01-01T00:00:00Z',
       });
 
-      await expect(resolveContext({ authorization: `Bearer ${token}` })).resolves.toEqual({
-        mindUserId: null,
-        mindUserRoles: null,
-        mindSessionExpiresIn: null,
-      });
+      await expect(resolveContext(service, { authorization: `Bearer ${token}` })).resolves.toEqual(EMPTY_IDENTITY);
       expect(logger.error).toHaveBeenCalledWith(expect.stringMatching(/^Session Expired/), expect.any(String));
     });
 
@@ -115,7 +102,7 @@ describe('GraphqlAuthJwksService', () => {
       jest.mocked(axios.get).mockResolvedValue({ data: { keys: [{ kid: 'other' }, jwk] } });
       const token = sign({ mindUserId: 'user-1', mindUserRoles: ['admin'], mindSessionExpiresIn: future() });
 
-      const ctx = await resolveContext({ authorization: `Bearer ${token}` });
+      const ctx = await resolveContext(service, { authorization: `Bearer ${token}` });
 
       expect(ctx).toMatchObject({ mindUserId: 'user-1' });
       expect(axios.get).toHaveBeenCalledWith('https://example.com/.well-known/jwks.json');
@@ -123,15 +110,14 @@ describe('GraphqlAuthJwksService', () => {
     });
 
     it('should resolve to undefined when the signature does not match the public key', async () => {
-      const { privateKey: otherKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
-      const token = jwt.sign({ mindUserId: 'user-1' }, otherKey, { algorithm: 'RS256', keyid: kid });
+      const token = jwt.sign({ mindUserId: 'user-1' }, otherPrivateKey, { algorithm: 'RS256', keyid: kid });
 
-      await expect(resolveContext({ authorization: `Bearer ${token}` })).resolves.toBeUndefined();
+      await expect(resolveContext(service, { authorization: `Bearer ${token}` })).resolves.toBeUndefined();
       expect(logger.error).toHaveBeenCalledWith('Error setting context', expect.any(String), expect.any(Error));
     });
 
     it('should resolve to undefined when the token cannot be decoded', async () => {
-      await expect(resolveContext({ authorization: 'Bearer not-a-jwt' })).resolves.toBeUndefined();
+      await expect(resolveContext(service, { authorization: 'Bearer not-a-jwt' })).resolves.toBeUndefined();
       expect(logger.error).toHaveBeenCalledWith('Error setting context', expect.any(String), expect.any(Error));
     });
   });

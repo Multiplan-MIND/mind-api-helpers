@@ -49,11 +49,11 @@ install cycle in `package.json` is for, and it is the reason the dependency layo
 
 Consequences to keep in mind when touching `package.json`:
 
-- Almost everything `src/` imports at **runtime** (`mongoose`, `ioredis`, `jsonwebtoken`, `jwk-to-pem`,
+- Almost everything `src/` imports at **runtime** (`mongoose`, `ioredis`,
   `graphql-type-json`, `winston`, `nest-winston`, `@nestjs/*`, `@apollo/server`) sits in
   `devDependencies`. The peers are `@nestjs/common` ^11, `@nestjs/graphql` ^13, `@nestjs/apollo` ^13,
-  `@apollo/server` ^5, `nest-winston` ^1.9.3, `winston` ^3, `graphql-type-json`, `ioredis`, `mongoose` 7/8 and
-  `reflect-metadata` 0.1/0.2, so this branch only fits consumers already on NestJS 11. At runtime `mongoose`,
+  `@apollo/server` ^5, `graphql` ^16.11, `nest-winston` ^1.9.3, `winston` ^3, `graphql-type-json`, `ioredis`,
+  `mongoose` 7/8 and `reflect-metadata` 0.1/0.2, so it only fits consumers already on NestJS 11. At runtime `mongoose`,
   `@nestjs/common`, `@nestjs/graphql`, `@apollo/server`, `winston`, `nest-winston`, `ioredis`,
   `graphql-type-json` and `reflect-metadata` resolve from `node_modules/mind-api-helpers/node_modules` (the
   nested copy installed by the `preinstall`); only `graphql` resolves from the consumer's root. That is why a
@@ -121,17 +121,10 @@ token against a JWKS document fetched from `process.env.JWKS_URL` and cached in 
 router, the JWKS variant at the edge. On failure both return `undefined` instead of throwing, which
 leaves the resolvers with no context.
 
-On this branch both target NestJS 11, `@nestjs/graphql`/`@nestjs/apollo` 13 and Apollo Server 5. `@nestjs/apollo`
-13 loads `@as-integrations/express5` at runtime, so the consumer must have it installed. The JWKS service
-serves `/*splat/graphql` (Express 5 / path-to-regexp 8 syntax for the old `/*/graphql`). Both set
-`status400ForVariableCoercionErrors: false` (keep Apollo Server 4's 200 for variable coercion errors) and
-`resolverValidationOptions: { requireResolversToMatchSchema: 'ignore' }` (keep ignoring the `JSON` resolver when
-no field uses the scalar, as @nestjs/graphql 12 did).
-
-Known limitation of this branch: the federation `@link` is **not pinned**. Both services pass
-`autoSchemaFile: { federation: 2 }`, so the subgraph declares the @nestjs/graphql 13 default, `federation/v2.12`,
-which `mind-api-router`'s `@apollo/gateway` 2.4.x cannot compose ("Invalid version v2.12 for the federation
-feature"). A service behind the current router must not take this branch's code expecting composition to work.
+Both share their options through `buildMindGqlOptions` (`graphql-options.builder.ts`); a service only adds its
+`context` (and the JWKS one its `path`), so a compatibility option is changed there, once. Required versions, the
+Express 5 path, the `'warn'` resolver validation, the `Date` type of `mindSessionExpiresIn` and the unpinned
+federation `@link` are documented in the README ("GraphQL" section), not repeated here.
 
 `mind-mongoose/helpers/query.helper.ts` translates the GraphQL input types from
 `mind-graphql/entities/query.entities.ts` into a Mongoose filter/options pair, so the two evolve

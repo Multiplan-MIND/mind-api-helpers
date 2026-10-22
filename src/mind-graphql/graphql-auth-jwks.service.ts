@@ -6,12 +6,11 @@ import { Inject, Injectable } from '@nestjs/common';
 import { GqlOptionsFactory } from '@nestjs/graphql';
 import { ApolloFederationDriverConfig } from '@nestjs/apollo';
 import { Redis } from 'ioredis';
-import { ApolloServerPluginLandingPageLocalDefault } from '@apollo/server/plugin/landingPage/default';
-import GraphQLJSON from 'graphql-type-json';
 
 import { MindLoggerService } from '../mind-logger/mind-logger.service';
 import { MindLogger } from '../mind-logger/mind-logger.decorator';
 import { logPrefix } from '../mind-logger/mind-logger.util';
+import { buildMindGqlOptions } from './graphql-options.builder';
 
 @Injectable()
 export class GraphqlAuthJwksService implements GqlOptionsFactory<ApolloFederationDriverConfig> {
@@ -23,21 +22,11 @@ export class GraphqlAuthJwksService implements GqlOptionsFactory<ApolloFederatio
   ) {}
 
   async createGqlOptions(): Promise<ApolloFederationDriverConfig> {
-    return {
-      // Express 5 (path-to-regexp 8) rejects unnamed wildcards; `*splat` keeps the Express 4 `/*/graphql` match
+    return buildMindGqlOptions({
+      // Serves /<any prefix>/graphql; Express 5 (path-to-regexp 8) requires a named wildcard
       path: '/*splat/graphql',
-      autoSchemaFile: { path: 'schema.gql', federation: 2 },
-      sortSchema: true,
-      playground: false,
-      // Apollo Server 5 answers variable coercion errors with 400; keep the Apollo Server 4 status (200)
-      status400ForVariableCoercionErrors: false,
-      plugins: [ApolloServerPluginLandingPageLocalDefault()],
-      resolvers: { JSON: GraphQLJSON },
-      // @nestjs/graphql 13 validates the resolver map against the federated schema; keep ignoring `JSON` when no
-      // field uses it, as @nestjs/graphql 12 did
-      resolverValidationOptions: { requireResolversToMatchSchema: 'ignore' },
       context: ({ req }) => this.mindHandleContext({ req }),
-    };
+    });
   }
 
   private async getPublicKey(kid) {
@@ -78,7 +67,7 @@ export class GraphqlAuthJwksService implements GqlOptionsFactory<ApolloFederatio
               if (expiresIn.getTime() > now.getTime()) {
                 ctx.mindUserId = decoded.mindUserId;
                 ctx.mindUserRoles = decoded.mindUserRoles;
-                ctx.mindSessionExpiresIn = decoded.mindSessionExpiresIn;
+                ctx.mindSessionExpiresIn = expiresIn;
               } else {
                 this.logger.error(`Session Expired: ${expiresIn.toISOString()} x ${now.toISOString()}`, _log);
               }
