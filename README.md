@@ -216,6 +216,43 @@ GraphQLModule.forRootAsync<ApolloFederationDriverConfig>({
 });
 ```
 
+### Tracing (OpenTelemetry)
+
+O módulo `mind-tracing` liga o SDK do OpenTelemetry e exporta os traces por OTLP/HTTP. Para ativá-lo, o
+serviço importa o `register` **na primeira linha do `main.ts`**:
+
+```ts
+import 'mind-api-helpers/dist/mind-tracing/register';
+import { NestFactory } from '@nestjs/core';
+// ... demais imports
+```
+
+Atenção à ordem: nada que carregue `mongoose` ou `@nestjs/*` pode ser importado antes do `register`. As
+instrumentações só conseguem alterar um módulo que ainda não foi carregado; importado antes, ele fica
+sem spans. Por isso o `register` **não** é exportado pelo `src/index.ts` (o barrel carrega o `mongoose` ao
+ser importado).
+
+O tracing fica desligado quando `OTEL_EXPORTER_OTLP_ENDPOINT` não está definida ou quando
+`OTEL_SDK_DISABLED=true`; nesse caso nada do SDK é carregado. Se o SDK falhar ao iniciar, uma linha vai
+para o `stderr` e a aplicação segue sem tracing.
+
+| Variável                      | Efeito                                                                                    |
+| ----------------------------- | ----------------------------------------------------------------------------------------- |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | endereço do coletor (ex.: `http://tempo.monitoring.svc.cluster.local:4318`); sem ela, desligado |
+| `OTEL_SDK_DISABLED`           | `true` desliga o tracing mesmo com o endpoint definido                                    |
+| `OTEL_SERVICE_NAME`           | nome do serviço nos traces (ex.: `mind-api-healthcheck`)                                  |
+| `OTEL_METRICS_EXPORTER`       | assume `none` se ausente (o SDK, por padrão, tentaria exportar para `localhost:4318`)     |
+| `OTEL_LOGS_EXPORTER`          | assume `none` se ausente, pelo mesmo motivo                                               |
+| `OTEL_TRACES_SAMPLER`         | amostragem; recomendado `parentbased_traceidratio`                                        |
+| `OTEL_TRACES_SAMPLER_ARG`     | razão de amostragem; recomendado `1.0`                                                    |
+| `MIND_TRACING_IGNORE_PATHS`   | lista separada por vírgula de caminhos sem trace; **soma-se** ao padrão `/health/live`     |
+
+No `SIGTERM` o módulo descarrega os spans pendentes (espera no máximo 5 s) e reenvia o sinal, para o
+processo encerrar normalmente. Se o serviço registrar o próprio handler de `SIGTERM`, o reenvio não
+acontece e o encerramento fica a cargo desse handler.
+
+`currentTraceId()` devolve o `traceId` do span ativo, quando existe.
+
 ## Variáveis de ambiente
 
 A biblioteca lê apenas três — quem as define é o serviço que a consome (ela não carrega `.env`):
