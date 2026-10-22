@@ -21,6 +21,9 @@
     "preinstall": "yarn --ignore-scripts",
     "postinstall": "yarn build"
   },
+  "resolutions": {
+    "@opentelemetry/api": "1.9.0"
+  },
   "dependencies": {
     "@opentelemetry/api": "1.9.0",
     "@opentelemetry/exporter-trace-otlp-http": "0.223.0",
