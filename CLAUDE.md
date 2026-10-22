@@ -14,9 +14,9 @@ it is re-exported there.
 
 ## Commands
 
-`.nvmrc` selects Node 24 (`24`, the newest 24.x installed in nvm) and the package manager is **yarn** (v1 /
-classic). Tests need Node >= 24.9: the NestJS 12 packages are ESM-only and Jest 30 can only `require()` them from
-that version on.
+`.nvmrc` selects Node 24 (`24`, the newest 24.x installed in nvm), `engines.node` is `>=24` (no upper
+bound) and the package manager is **yarn** (v1 / classic). Tests need Node >= 24.9: the NestJS 12 packages are
+ESM-only and Jest 30 can only `require()` them from that version on.
 
 ```bash
 nvm use                                   # required: Jest needs Node >= 24.9 (require(esm))
@@ -51,11 +51,11 @@ install cycle in `package.json` is for, and it is the reason the dependency layo
 
 Consequences to keep in mind when touching `package.json`:
 
-- Almost everything `src/` imports at **runtime** (`mongoose`, `ioredis`, `jsonwebtoken`, `jwk-to-pem`,
+- Almost everything `src/` imports at **runtime** (`mongoose`, `ioredis`,
   `graphql-type-json`, `winston`, `nest-winston`, `@nestjs/*`, `@apollo/server`) sits in
   `devDependencies`. The peers are `@nestjs/common` ^12, `@nestjs/graphql` ^14, `@nestjs/apollo` ^14,
-  `@apollo/server` ^5, `nest-winston` ^2, `winston` ^3, `graphql-type-json`, `ioredis`, `mongoose` 7/8 and
-  `reflect-metadata` 0.1/0.2, so this branch only fits consumers already on NestJS 12. At runtime `mongoose`,
+  `@apollo/server` ^5, `graphql` ^16.11, `nest-winston` ^2, `winston` ^3, `graphql-type-json`, `ioredis`,
+  `mongoose` 7/8 and `reflect-metadata` 0.1/0.2, so it only fits consumers already on NestJS 12. At runtime `mongoose`,
   `@nestjs/common`, `@nestjs/graphql`, `@apollo/server`, `winston`, `nest-winston`, `ioredis`,
   `graphql-type-json` and `reflect-metadata` resolve from `node_modules/mind-api-helpers/node_modules` (the
   nested copy installed by the `preinstall`); only `graphql` resolves from the consumer's root. That is why a
@@ -63,8 +63,9 @@ Consequences to keep in mind when touching `package.json`:
   below exists.
 - `dependencies` holds only `axios`, `jsonwebtoken` and `jwk-to-pem` (exact pins). `axios` is imported by
   `error.helper.ts` and `graphql-auth-jwks.service.ts`.
-- `engines.node` is `>=20.19.0`: NestJS 12 ships ESM only and CommonJS consumers load it through Node's
-  `require(esm)`, unflagged from 20.19 on. Running this package's tests needs Node >= 24.9 (Jest 30).
+- `engines.node` is `>=24`: the library and its consuming services move to Node 24 together. NestJS 12 ships ESM
+  only and CommonJS consumers load it through Node's `require(esm)`. Running this package's tests needs Node >= 24.9
+  (Jest 30).
 - Releasing means bumping `version` in `package.json`, tagging the commit, and updating the `#tag` in
   each consuming repo. Branches are used as refs too (`#feature/to-error-helper`) while a change is
   being validated against a service.
@@ -126,32 +127,11 @@ token against a JWKS document fetched from `process.env.JWKS_URL` and cached in 
 router, the JWKS variant at the edge. On failure both return `undefined` instead of throwing, which
 leaves the resolvers with no context.
 
-On this branch both target NestJS 12, `@nestjs/graphql`/`@nestjs/apollo` 14 and Apollo Server 5. `@nestjs/apollo`
-loads `@as-integrations/express5` at runtime, so the consumer must have it installed. The JWKS service
-serves `/*splat/graphql` (Express 5 / path-to-regexp 8 syntax for the old `/*/graphql`). Both set
-`status400ForVariableCoercionErrors: false` (keep Apollo Server 4's 200 for variable coercion errors) and
-`resolverValidationOptions: { requireResolversToMatchSchema: 'ignore' }` (keep ignoring the `JSON` resolver when
-no field uses the scalar, as @nestjs/graphql 12 did).
-
-Both services take the federation `@link` from `MIND_FEDERATION_CONFIG` (`graphql-federation.config.ts`,
-re-exported by the barrel): `federation/v2.3` with the 11 directives NestJS 10 imported, in that order. The newer
-@nestjs/graphql defaults (v2.12 in 13, v2.14 in 14) are rejected by `mind-api-router`'s `@apollo/gateway` 2.4.x
-("Invalid version ... for the federation feature"); v2.3 composes. Raise the pin only together with the router's
-gateway; the specs assert the exact `@link` line.
-
-Consumers on TypeScript 5.9 need a tsconfig `paths` entry. The install cycle leaves a second `@apollo/server`
-(and `@nestjs/*`) under `node_modules/mind-api-helpers/node_modules`. TS 5.9 does not merge the two copies
-(their package ids differ), so the consumer build fails with TS2322 on `GraphQLModule.forRootAsync({ useClass })`
-(`HeaderMap` `separate declarations of a private property '__identity'`). TS 5.1 accepted it. Fix in the
-consumer's `compilerOptions`. Targets are relative (`./node_modules/...`) so they keep working when `baseUrl` is
-deprecated in TS 6. It affects type resolution only; the emitted JS is unchanged:
-
-```json
-"paths": {
-  "@apollo/server": ["./node_modules/@apollo/server"],
-  "@apollo/server/*": ["./node_modules/@apollo/server/*"]
-}
-```
+Both share their options through `buildMindGqlOptions` (`graphql-options.builder.ts`); a service only adds its
+`context` (and the JWKS one its `path`), so a compatibility option is changed there, once. Required versions, the
+Express 5 path, the `'warn'` resolver validation, the `Date` type of `mindSessionExpiresIn`, the federation `@link`
+pinned in `MIND_FEDERATION_CONFIG` (`graphql-federation.config.ts`) and the consumer `paths` workaround for
+TypeScript 5.9 are documented in the README ("GraphQL" section), not repeated here.
 
 `mind-mongoose/helpers/query.helper.ts` translates the GraphQL input types from
 `mind-graphql/entities/query.entities.ts` into a Mongoose filter/options pair, so the two evolve
