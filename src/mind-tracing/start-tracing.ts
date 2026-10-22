@@ -1,3 +1,4 @@
+import { diag, DiagLogLevel } from '@opentelemetry/api';
 import type { NodeSDK } from '@opentelemetry/sdk-node';
 import { ignoreIncomingRequest, parseIgnorePaths } from './ignore-paths';
 
@@ -7,7 +8,9 @@ const SHUTDOWN_TIMEOUT_MS = 5000;
  * Starts the OpenTelemetry SDK when OTEL_EXPORTER_OTLP_ENDPOINT is set and OTEL_SDK_DISABLED is not "true".
  * Otherwise it does nothing and loads nothing from the SDK. The SDK and the instrumentations are loaded with
  * `require` inside this function, after those checks, so a disabled service pays no cost for them.
- * An SDK failure is reported on stderr and never stops the application.
+ * An SDK failure is reported on stderr and never stops the application. So is the first export failure.
+ *
+ * The `env` parameter is meant for tests: the defaults set below only reach `NodeSDK` when `env` is `process.env`.
  */
 export function startTracing(env: NodeJS.ProcessEnv = process.env): NodeSDK | undefined {
   if (env.OTEL_SDK_DISABLED === 'true' || !env.OTEL_EXPORTER_OTLP_ENDPOINT) {
@@ -44,6 +47,7 @@ export function startTracing(env: NodeJS.ProcessEnv = process.env): NodeSDK | un
       ],
     });
     sdk.start();
+    registerExportErrorLogger(env);
     registerShutdown(sdk);
     return sdk;
   } catch (e) {
@@ -51,6 +55,36 @@ export function startTracing(env: NodeJS.ProcessEnv = process.env): NodeSDK | un
     process.stderr.write(`[mind-tracing] failed to start OpenTelemetry, continuing without tracing: ${message}\n`);
     return undefined;
   }
+}
+
+/**
+ * Export failures reach OpenTelemetry's diag error handler, and NodeSDK installs a diag logger only when
+ * OTEL_LOG_LEVEL is set. Without one, a wrong endpoint or a collector outage would print nothing, so this installs
+ * a logger that writes the first error to stderr and ignores the rest. When OTEL_LOG_LEVEL is set the user
+ * controls diagnostics and nothing is installed.
+ */
+function registerExportErrorLogger(env: NodeJS.ProcessEnv): void {
+  if (env.OTEL_LOG_LEVEL) {
+    return;
+  }
+  let logged = false;
+  const noop = () => undefined;
+  diag.setLogger(
+    {
+      error: (message: string) => {
+        if (logged) {
+          return;
+        }
+        logged = true;
+        process.stderr.write(`[mind-tracing] OpenTelemetry error (further errors are not logged): ${message}\n`);
+      },
+      warn: noop,
+      info: noop,
+      debug: noop,
+      verbose: noop,
+    },
+    DiagLogLevel.ERROR,
+  );
 }
 
 /**
