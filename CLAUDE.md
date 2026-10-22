@@ -14,7 +14,7 @@ it is re-exported there.
 
 ## Commands
 
-`.nvmrc` selects Node 24 (`24`, the newest 24.x installed in nvm), `engines.node` is `>=20.15.1` (no upper
+`.nvmrc` selects Node 24 (`24`, the newest 24.x installed in nvm), `engines.node` is `>=24` (no upper
 bound) and the package manager is **yarn** (v1 / classic).
 
 ```bash
