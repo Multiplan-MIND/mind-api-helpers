@@ -1,3 +1,4 @@
+import { diag } from '@opentelemetry/api';
 import { NodeSDK } from '@opentelemetry/sdk-node';
 import { HttpInstrumentation } from '@opentelemetry/instrumentation-http';
 import { startTracing } from './start-tracing';
@@ -30,6 +31,7 @@ describe('startTracing', () => {
   });
 
   afterEach(() => {
+    diag.disable();
     process.removeAllListeners('SIGTERM');
     kill.mockRestore();
     jest.useRealTimers();
@@ -76,6 +78,46 @@ describe('startTracing', () => {
     expect(startTracing({ ...enabled })).toBeUndefined();
     expect(write).toHaveBeenCalledTimes(1);
     write.mockRestore();
+  });
+
+  describe('export error logging', () => {
+    let write: jest.SpyInstance;
+
+    beforeEach(() => {
+      write = jest.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    });
+
+    afterEach(() => {
+      write.mockRestore();
+    });
+
+    it('writes exactly one stderr line for the first OpenTelemetry error and ignores later ones', () => {
+      startTracing({ ...enabled });
+      diag.error('boom');
+      diag.error('second');
+      expect(write).toHaveBeenCalledTimes(1);
+      expect(write.mock.calls[0][0]).toContain('boom');
+      expect(write.mock.calls[0][0]).not.toContain('second');
+    });
+
+    it('ignores levels other than error', () => {
+      startTracing({ ...enabled });
+      diag.warn('careful');
+      diag.info('fyi');
+      expect(write).not.toHaveBeenCalled();
+    });
+
+    it('does not install the logger when tracing is disabled', () => {
+      startTracing({ ...enabled, OTEL_SDK_DISABLED: 'true' });
+      diag.error('boom');
+      expect(write).not.toHaveBeenCalled();
+    });
+
+    it('does not install the logger when OTEL_LOG_LEVEL is set', () => {
+      startTracing({ ...enabled, OTEL_LOG_LEVEL: 'info' });
+      diag.error('boom');
+      expect(write).not.toHaveBeenCalled();
+    });
   });
 
   it('flushes on SIGTERM and re-raises it when the app has no handler of its own', async () => {
