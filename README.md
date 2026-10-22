@@ -28,7 +28,7 @@ O código em `src/` já está todo em inglês — mantenha assim.
 ## Requisitos
 
 - **Node 24**, a versão do `.nvmrc` (`24`, a 24.x mais nova instalada no nvm). O `engines` do
-  `package.json` aceita `>=20.15.1`, sem limite superior. A configuração de debug do VS Code ainda aponta
+  `package.json` exige `>=24`, sem limite superior. A configuração de debug do VS Code ainda aponta
   para o caminho fixo `$NVM_DIR/versions/node/v20.20.2`, então ela só funciona com essa versão instalada
   no nvm.
 - **yarn 1.x** (clássico) — o `yarn.lock` do repositório é v1.

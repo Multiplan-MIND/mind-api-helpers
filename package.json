@@ -4,7 +4,7 @@
   "description": "",
   "author": "https://github.com/Multiplan-MIND/",
   "engines": {
-    "node": ">=20.15.1"
+    "node": ">=24"
   },
   "private": true,
   "main": "dist/index.js",
