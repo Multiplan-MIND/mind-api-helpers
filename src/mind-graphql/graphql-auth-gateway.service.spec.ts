@@ -1,26 +1,25 @@
 import GraphQLJSON from 'graphql-type-json';
 
-import { federationLinkOf, NEST_10_FEDERATION_LINK } from './federation-link.spec-helper';
-import { MIND_FEDERATION_CONFIG } from './graphql-federation.config';
 import { GraphqlAuthGatewayService } from './graphql-auth-gateway.service';
+import { MIND_FEDERATION_CONFIG } from './graphql-federation.config';
+import {
+  createLoggerMock,
+  EMPTY_IDENTITY,
+  federationLinkOf,
+  LoggerMock,
+  NEST_10_FEDERATION_LINK,
+  resolveContext,
+} from './graphql-auth.spec-helper';
 
-// `graphql` is deliberately not a devDependency: consumers install this package with its devDependencies nested,
-// and a second `graphql` copy there breaks their schema (`Int` from another realm). Stub the scalar instead.
+// Stubs the scalar instead of installing `graphql`; see graphql-auth.spec-helper.ts for the reason
 jest.mock('graphql-type-json', () => ({ __esModule: true, default: { name: 'JSON' } }));
-
-type LoggerMock = { debug: jest.Mock; error: jest.Mock };
 
 describe('GraphqlAuthGatewayService', () => {
   let logger: LoggerMock;
   let service: GraphqlAuthGatewayService;
 
-  const resolveContext = async (headers: Record<string, string>) => {
-    const options = await service.createGqlOptions();
-    return (options.context as (arg: unknown) => unknown)({ req: { headers } });
-  };
-
   beforeEach(() => {
-    logger = { debug: jest.fn(), error: jest.fn() };
+    logger = createLoggerMock();
     service = new GraphqlAuthGatewayService(logger as any, {} as any);
   });
 
@@ -32,9 +31,8 @@ describe('GraphqlAuthGatewayService', () => {
         autoSchemaFile: { path: 'schema.gql', federation: MIND_FEDERATION_CONFIG },
         sortSchema: true,
         playground: false,
-        status400ForVariableCoercionErrors: false,
         resolvers: { JSON: GraphQLJSON },
-        resolverValidationOptions: { requireResolversToMatchSchema: 'ignore' },
+        resolverValidationOptions: { requireResolversToMatchSchema: 'warn' },
       });
       expect(options.path).toBeUndefined();
       expect(options.plugins).toHaveLength(1);
@@ -50,16 +48,12 @@ describe('GraphqlAuthGatewayService', () => {
 
   describe('context', () => {
     it('should return an empty identity when the gateway headers are absent', async () => {
-      await expect(resolveContext({})).resolves.toEqual({
-        mindUserId: null,
-        mindUserRoles: null,
-        mindSessionExpiresIn: null,
-      });
+      await expect(resolveContext(service, {})).resolves.toEqual(EMPTY_IDENTITY);
     });
 
     it('should trust the identity injected by the gateway', async () => {
       await expect(
-        resolveContext({
+        resolveContext(service, {
           'mind-user-id': 'user-1',
           'mind-user-roles': 'admin,user-viewer',
           'mind-session-expires-in': '2030-01-01T00:00:00Z',
@@ -71,9 +65,12 @@ describe('GraphqlAuthGatewayService', () => {
       });
     });
 
-    it('should resolve to undefined and log when the roles header is missing', async () => {
-      await expect(resolveContext({ 'mind-user-id': 'user-1' })).resolves.toBeUndefined();
-      expect(logger.error).toHaveBeenCalledWith('Error setting context', expect.any(String), expect.any(TypeError));
+    it('should keep the user id and default the roles to empty when the roles header is missing', async () => {
+      await expect(resolveContext(service, { 'mind-user-id': 'user-1' })).resolves.toMatchObject({
+        mindUserId: 'user-1',
+        mindUserRoles: [],
+      });
+      expect(logger.error).not.toHaveBeenCalled();
     });
   });
 });

@@ -29,7 +29,7 @@ O código em `src/` já está todo em inglês — mantenha assim.
 
 - **Node 24**, fixado no `.nvmrc` em `v24.21.0`; a configuração de debug do VS Code usa Node 24 via
   `runtimeVersion`. Os testes precisam de Node 24.9 ou mais novo: os pacotes do NestJS 12 são só ESM e o Jest 30 só
-  consegue dar `require()` neles a partir dessa versão. O `engines` do `package.json` (`>=20.19.0`) vale para quem
+  consegue dar `require()` neles a partir dessa versão. O `engines` do `package.json` (`>=24`) vale para quem
   consome a biblioteca; ver [Dependências e ambientes](#dependências-e-ambientes).
 - **yarn 1.x** (clássico) — o `yarn.lock` do repositório é v1.
 - Acesso de leitura à organização `Multiplan-MIND` no GitHub, já que a instalação é feita pela URL do
@@ -159,13 +159,14 @@ Dois detalhes que costumam gerar dúvida:
 Ambas exigem que o serviço forneça um provider `REDIS_CLIENT` (um client `ioredis`) e, em caso de
 falha, retornam `undefined` em vez de lançar — os resolvers ficam sem contexto.
 
-Nesta branch as duas exigem NestJS 12, `@nestjs/graphql`/`@nestjs/apollo` 14, `nest-winston` 2 e
-`@apollo/server` 5 (ver `peerDependencies`). O `@nestjs/apollo` carrega o `@as-integrations/express5` em
-tempo de execução, então o serviço precisa tê-lo instalado (ele é peer dependency, e a falta dele avisa na
-instalação). O serviço JWKS publica em `/*splat/graphql` (sintaxe do Express 5, equivalente ao antigo
-`/*/graphql`), e as duas mantêm o status 200 do Apollo 4 para erros de coerção de variáveis
-(`status400ForVariableCoercionErrors: false`) e, como o `@nestjs/graphql` 12, ignoram o resolver `JSON`
-quando nenhum campo usa esse scalar (`requireResolversToMatchSchema: 'ignore'`).
+As duas exigem NestJS 12, `@nestjs/graphql`/`@nestjs/apollo` 14, `nest-winston` 2 e `@apollo/server` 5 (ver
+`peerDependencies`) e compartilham as opções montadas por `buildMindGqlOptions`
+(`graphql-options.builder.ts`); cada serviço só define o `context` (e o JWKS, o `path`). O
+`@nestjs/apollo` carrega o `@as-integrations/express5` em tempo de execução, então o serviço precisa
+tê-lo instalado (ele é peer dependency, e a falta dele avisa na instalação). O serviço JWKS publica em `/*splat/graphql` (o Express 5 exige curinga nomeado). Erros de
+coerção de variáveis respondem 400, o padrão do Apollo Server 5. O resolver `JSON` é sempre registrado, e
+`requireResolversToMatchSchema` é `'warn'`: um serviço sem nenhum campo `JSON` recebe um aviso no boot em
+vez de falhar. Nas duas, `mindSessionExpiresIn` é um `Date`.
 
 O `@link` de federação que o subgraph declara fica fixo em `MIND_FEDERATION_CONFIG`
 (`src/mind-graphql/graphql-federation.config.ts`, exportado pelo _barrel_ e congelado com `Object.freeze`):
@@ -173,7 +174,15 @@ O `@link` de federação que o subgraph declara fica fixo em `MIND_FEDERATION_CO
 `@nestjs/graphql` (v2.12 no 13, v2.14 no 14) não são compostos pelo `@apollo/gateway` 2.4.x do `mind-api-router`
 (`Invalid version ... for the federation feature`); a v2.3 é. Só suba essa versão junto com o gateway do router. Os
 specs dos dois serviços conferem a linha exata do `@link` gerado, com o helper compartilhado
-`src/mind-graphql/federation-link.spec-helper.ts` (fora do build e do lint, como os specs).
+`src/mind-graphql/graphql-auth.spec-helper.ts` (fora do build e do lint, como os specs).
+
+O pin só vale para quem usa estes serviços: **todo subgraph atrás do router deve usar o
+`MIND_FEDERATION_CONFIG`**, inclusive o serviço que monta o `GraphQLModule` direto, com
+`autoSchemaFile: { federation: MIND_FEDERATION_CONFIG }`. Com `federation: 2`, o subgraph publica o padrão do
+`@nestjs/graphql` 14 (`federation/v2.14`) e a composição no router falha. Os specs da biblioteca conferem o
+decorator do `@link`, não o SDL publicado: para esse, consulte `{ _service { sdl } }` no serviço. Enquanto o
+`@apollo/gateway` do router não subir, as diretivas mais novas da federação (`@authenticated`,
+`@requiresScopes`, `@policy`, `@cost`, `@listSize`) não ficam disponíveis nos subgraphs.
 
 **Serviços em TypeScript 5.9 precisam de um `paths` no `tsconfig.json`.** O ciclo de instalação desta
 biblioteca deixa uma segunda cópia do `@apollo/server` (e dos `@nestjs/*`) em
@@ -213,17 +222,18 @@ A chave pública fica em cache sob `JWKS_PUBLIC_KEY` por um dia.
 
 ## Dependências e ambientes
 
-Quase tudo o que o código importa em tempo de execução (`mongoose`, `ioredis`, `jsonwebtoken`, `jwk-to-pem`,
-`graphql-type-json`, `winston`, `nest-winston`, `@nestjs/*`, `@apollo/server`) está em `devDependencies`. As
-`peerDependencies` declaram o que o serviço precisa ter instalado: `@nestjs/common` ^12, `@nestjs/graphql` ^14,
-`@nestjs/apollo` ^14, `@apollo/server` ^5, `nest-winston` ^2, `winston` ^3, `graphql-type-json`, `ioredis`,
-`mongoose` (7, 8 ou 9), `reflect-metadata` (0.1 ou 0.2) e `@as-integrations/express5` ^1.1.2. Por causa dessas
-faixas, esta branch só serve para serviços já no NestJS 12. Na prática, `mongoose`, `@nestjs/common`,
-`@nestjs/graphql`, `@apollo/server`, `winston`, `nest-winston`, `ioredis`, `graphql-type-json` e `reflect-metadata`
-são resolvidos a partir de `node_modules/mind-api-helpers/node_modules` (a cópia aninhada instalada pelo
-`preinstall`); só o `graphql` é resolvido no `node_modules` da raiz do serviço. Por isso o serviço pode ter versões
-diferentes das que esta biblioteca usa, e por isso existe o `paths` do `tsconfig` descrito acima. Vale conferir o
-serviço antes de mexer nas versões.
+Quase tudo o que o código importa em tempo de execução (`mongoose`, `ioredis`,
+`graphql-type-json`, `winston`, `nest-winston`, `@nestjs/*`, `@apollo/server`) está em
+`devDependencies`. As `peerDependencies` declaram o que o serviço precisa ter instalado: `@nestjs/common`
+^12, `@nestjs/graphql` ^14, `@nestjs/apollo` ^14, `@apollo/server` ^5, `graphql` ^16.11, `nest-winston` ^2,
+`winston` ^3, `graphql-type-json`, `ioredis`, `mongoose` (7, 8 ou 9), `reflect-metadata` (0.1 ou 0.2) e
+`@as-integrations/express5` ^1.1.2. Por causa dessas faixas, a biblioteca só serve para serviços já no NestJS 12.
+Na prática, `mongoose`, `@nestjs/common`,
+`@nestjs/graphql`, `@apollo/server`, `winston`, `nest-winston`, `ioredis`, `graphql-type-json` e
+`reflect-metadata` são resolvidos a partir de `node_modules/mind-api-helpers/node_modules` (a cópia aninhada
+instalada pelo `preinstall`); só o `graphql` é resolvido no `node_modules` da raiz do serviço. Por isso o
+serviço pode ter versões diferentes das que esta biblioteca usa, e por isso existe o `paths` do `tsconfig`
+descrito acima. Vale conferir o serviço antes de mexer nas versões.
 
 Nunca adicione o `graphql` às `devDependencies`: uma segunda cópia dele dentro de
 `node_modules/mind-api-helpers/node_modules` faz o serviço falhar com `Cannot determine a GraphQL input type`
@@ -232,9 +242,9 @@ nos _input types_ de `query.entities.ts`.
 As `dependencies` têm só `axios` (usado por `error.helper.ts` e pelo serviço JWKS), `jsonwebtoken` e
 `jwk-to-pem`, com versões exatas.
 
-O `engines.node` é `>=20.19.0`: o NestJS 12 só publica ESM, e um serviço CommonJS o carrega pelo
-`require(esm)` do Node, liberado sem flag a partir da 20.19. Para rodar os testes desta biblioteca é preciso
-Node 24.9 ou mais novo (Jest 30).
+O `engines.node` é `>=24`: a biblioteca e os serviços que a consomem sobem juntos para o Node 24. O NestJS 12
+só publica ESM, e um serviço CommonJS o carrega pelo `require(esm)` do Node. Para rodar os testes desta
+biblioteca é preciso Node 24.9 ou mais novo (Jest 30).
 
 ## Versionamento e publicação
 
