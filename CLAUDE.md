@@ -123,6 +123,30 @@ together: a new `OperationEnum` member needs a matching `case` in `getQuery`, an
 non-null wins). `getOptions` defaults to `skip: 0, limit: 100` when no options are given, but honours
 the GraphQL defaults (`limit: 10`, sort by `updatedAt` desc) when they are.
 
+### `mind-tracing` — OpenTelemetry entry point
+
+`startTracing(env = process.env)` (`start-tracing.ts`) starts the OpenTelemetry `NodeSDK` with the OTLP/HTTP trace
+exporter and six instrumentations (http, express, nestjs-core, mongodb, ioredis, amqplib). `register.ts` is only
+a `startTracing()` call; consumers load it as `mind-api-helpers/dist/mind-tracing/register` on the first line of
+`main.ts`.
+
+- **`register` is not exported from `src/index.ts` on purpose.** The barrel imports `mongoose` at load time, and
+  the instrumentations can only patch a module that has not been loaded yet. Re-exporting it would defeat the
+  import order.
+- The SDK, the exporter and the instrumentations are loaded with `require` **inside** `startTracing`, after the
+  disabled / no-endpoint checks, so nothing from `@opentelemetry/sdk-node` is loaded when tracing is off. Use
+  `import type` for their types. `dist/mind-tracing/register.js` loaded without env must not put `sdk-node` in
+  `require.cache`.
+- `OTEL_METRICS_EXPORTER` and `OTEL_LOGS_EXPORTER` default to `none` on the given `env`: NodeSDK 0.223 would
+  otherwise start metrics/logs OTLP exporters against `localhost:4318` and spam connection errors.
+- A `SIGTERM` listener disables Node's default exit-on-SIGTERM, so the handler flushes (5 s cap, unref'd timer)
+  and re-raises `SIGTERM` only when `process.listenerCount('SIGTERM') === 0`.
+- **Pinned versions (no `^`):** `@opentelemetry/api` 1.9.0, `sdk-node` 0.223.0, `exporter-trace-otlp-http` 0.223.0,
+  `instrumentation-http` 0.223.0, `instrumentation-express` 0.71.1, `instrumentation-nestjs-core` 0.70.0,
+  `instrumentation-mongodb` 0.76.0, `instrumentation-ioredis` 0.71.0, `instrumentation-amqplib` 0.70.0. Newer
+  releases require Node >= 22.15, so **Node 20 (`.nvmrc`) caps these versions**; do not bump them without
+  moving the Node floor of the consuming services.
+
 ## Conventions and gotchas
 
 - **Code is English only**, per the "Idioma" section of the README: identifiers, file names, comments,
