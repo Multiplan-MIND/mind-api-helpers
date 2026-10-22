@@ -139,6 +139,16 @@ a `startTracing()` call; consumers load it as `mind-api-helpers/dist/mind-tracin
   `require.cache`.
 - `OTEL_METRICS_EXPORTER` and `OTEL_LOGS_EXPORTER` default to `none` on the given `env`: NodeSDK 0.223 would
   otherwise start metrics/logs OTLP exporters against `localhost:4318` and spam connection errors.
+- `OTEL_*` and `MIND_TRACING_IGNORE_PATHS` must be in the real process environment: `register` runs on the first
+  line of `main.ts`, before `ConfigModule`/`dotenv` read `.env`, so values that exist only in `.env` arrive too
+  late and tracing stays silently off.
+- Export errors go to OpenTelemetry's diag error handler, and `NodeSDK` installs a diag logger only when
+  `OTEL_LOG_LEVEL` is set. When it is not, `startTracing` installs an ERROR-level logger that writes the first
+  error to stderr and ignores the rest. The `env` parameter is meant for tests: the defaults only reach `NodeSDK`
+  when `env` is `process.env`.
+- Consumers should keep `"resolutions": { "@opentelemetry/api": "1.9.0" }` (check with `yarn why
+  @opentelemetry/api`): two copies (1.9.0 and a newer 1.x) can leave the SDK and the instrumentations not seeing
+  each other.
 - A `SIGTERM` listener disables Node's default exit-on-SIGTERM, so the handler flushes (5 s cap, unref'd timer)
   and re-raises `SIGTERM` only when `process.listenerCount('SIGTERM') === 0`.
 - **Pinned versions (no `^`):** `@opentelemetry/api` 1.9.0, `sdk-node` 0.223.0, `exporter-trace-otlp-http` 0.223.0,
