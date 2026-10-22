@@ -195,6 +195,10 @@ No `SIGTERM` o módulo descarrega os spans pendentes (espera no máximo 5 s) e r
 processo encerrar normalmente. Se o serviço registrar o próprio handler de `SIGTERM`, o reenvio não
 acontece e o encerramento fica a cargo desse handler.
 
+Para manter uma única cópia de `@opentelemetry/api` (1.9.0), esta biblioteca declara
+`"resolutions": { "@opentelemetry/api": "1.9.0" }`, mas o `resolutions` do Yarn só vale no projeto raiz.
+Cada serviço que ativar o tracing deve incluir o mesmo bloco no próprio `package.json`.
+
 `currentTraceId()` devolve o `traceId` do span ativo, quando existe.
 
 ## Variáveis de ambiente
