@@ -176,6 +176,14 @@ O `@link` de federação que o subgraph declara fica fixo em `MIND_FEDERATION_CO
 (`Invalid version ... for the federation feature`); a v2.3 é. Só suba essa versão junto com o gateway do
 router. Os specs dos dois serviços conferem a linha exata do `@link` gerado.
 
+O pin só vale para quem usa estes serviços: **todo subgraph atrás do router deve usar o
+`MIND_FEDERATION_CONFIG`**, inclusive o serviço que monta o `GraphQLModule` direto, com
+`autoSchemaFile: { federation: MIND_FEDERATION_CONFIG }`. Com `federation: 2`, o subgraph publica o padrão do
+`@nestjs/graphql` 14 (`federation/v2.14`) e a composição no router falha. Os specs da biblioteca conferem o
+decorator do `@link`, não o SDL publicado: para esse, consulte `{ _service { sdl } }` no serviço. Enquanto o
+`@apollo/gateway` do router não subir, as diretivas mais novas da federação (`@authenticated`,
+`@requiresScopes`, `@policy`, `@cost`, `@listSize`) não ficam disponíveis nos subgraphs.
+
 **Serviços em TypeScript 5.9 precisam de um `paths` no `tsconfig.json`.** O ciclo de instalação desta
 biblioteca deixa uma segunda cópia do `@apollo/server` (e dos `@nestjs/*`) em
 `node_modules/mind-api-helpers/node_modules`. O TypeScript 5.9 não junta as duas cópias, e o build do serviço

@@ -31,7 +31,14 @@ export const NEST_10_FEDERATION_LINK =
   '"@external", "@inaccessible", "@interfaceObject", "@key", "@override", "@provides", "@requires", "@shareable", "@tag"])';
 
 // Runs the @nestjs/graphql code that writes the federation `@link` into the subgraph type defs
-// (GraphQLFederationFactory -> TypeDefsDecoratorFactory -> TypeDefsFederation2Decorator) with the service options
+// (TypeDefsDecoratorFactory -> TypeDefsFederation2Decorator) with the service options.
+//
+// This covers the decorator step only, not the SDL a subgraph publishes: GraphQLFederationFactory, which reads
+// `autoSchemaFile.federation` and builds that SDL, imports `graphql` at module level, and `graphql` cannot be a
+// devDependency here. The factory is called with the federation major fixed at 2, and the import below relies on a
+// path the package `exports` map exposes (`./*`) although the class is not exported from the package root. The
+// published `@link` has to be checked outside this library: `{ _service { sdl } }` on a consuming service, or the
+// composition check of mind-api-router.
 export const federationLinkOf = (options: ApolloFederationDriverConfig) => {
   const { federation } = options.autoSchemaFile as SchemaFileConfig;
   const config = federation as Federation2Config;
