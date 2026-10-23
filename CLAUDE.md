@@ -27,7 +27,7 @@ yarn test src/mind-helpers               # one directory
 yarn test -t 'should preserve subclasses' # one test by name
 ```
 
-There is no watch/coverage script; use `yarn test --watch` / `--coverage` directly. `.vscode/launch.json`
+`yarn test:cov` runs jest with coverage and fails below the 90% line `coverageThreshold` in `jest.config.json` (plain `yarn test` is not affected); use `yarn test --watch` for watch mode. `.vscode/launch.json`
 provides an "API Helpers - Jest" debug configuration (hardcoded to `$NVM_DIR/versions/node/v20.20.2`).
 
 ## How this library is distributed
@@ -61,7 +61,7 @@ Consequences to keep in mind when touching `package.json`:
 
 ## Architecture
 
-Dependency direction is one-way: `mind-helpers` ← `mind-logger` ← `mind-graphql` / `mind-mongoose`.
+Dependency direction is one-way: `mind-helpers` ← `mind-logger` ← `mind-session` ← `mind-graphql` / `mind-mongoose`.
 `mind-helpers` imports nothing internal, so it is the safe place for shared primitives.
 
 ### `mind-logger` — the decorator/registry pattern
@@ -109,12 +109,28 @@ the logger.
 `GraphqlAuthJwksService` and `GraphqlAuthGatewayService` are two interchangeable `GqlOptionsFactory`
 implementations for Apollo Federation 2. Both require the consumer to provide a `REDIS_CLIENT`
 provider (an `ioredis` client) and both build the same request context
-(`mindUserId`, `mindUserRoles`, `mindSessionExpiresIn`) — the JWKS one by verifying the `Bearer`
+(`mindUserId`, `mindUserRoles`, `mindSessionExpiresIn`, `mindSessionId`, `mindRequestInfo`) — the JWKS one by verifying the `Bearer`
 token against a JWKS document fetched from `process.env.JWKS_URL` and cached in redis under
 `JWKS_PUBLIC_KEY` for a day; the gateway one by trusting the `mind-user-id` / `mind-user-roles` /
 `mind-session-expires-in` headers already injected upstream. Use the gateway variant behind the
-router, the JWKS variant at the edge. On failure both return `undefined` instead of throwing, which
-leaves the resolvers with no context.
+router, the JWKS variant at the edge. On failure (invalid token, revoked session, Redis down, malformed
+identity headers) both **throw** a `GraphQLError` `UNAUTHENTICATED` (HTTP 401) via `unauthenticatedError()`.
+Never return `undefined` from the context: the Apollo driver replaces an empty context with `{ req }` and
+the request would continue as anonymous with status 200.
+
+### `mind-session`
+
+- Revocation: `mind:session:revoked:<sid>` is a **global** key (ignores the service `keyPrefix`), so the
+  helpers use `EVAL` with the key in `ARGV` (`numkeys = 0`). That assumes **standalone Redis without
+  per-prefix ACL** (the current topology); Redis Cluster or ACLs would break it (see README, "Premissas do
+  redis"). TTL = remaining session time + 60 s clock-skew margin. `markSessionsRevoked` returns
+  `{ revoked, failed }` instead of throwing on the first error.
+- `SESSION_REQUIRE_SID` is parsed once in the `GraphqlAuthJwksService` constructor and only accepts
+  `true|false|1|0`; any other value throws at boot (fail-open misconfiguration is not allowed). A token whose
+  `sid` claim exists but is not a non-empty string is rejected, not treated as legacy.
+- `extractIp()` uses `req.ip` (needs the service's `trust proxy`) and validates with `net.isIP()`. It must
+  never read the first `X-Forwarded-For` item: that is client-controlled. Behind the router the gateway
+  service reads `mind-request-ip`, which the router sets.
 
 `mind-mongoose/helpers/query.helper.ts` translates the GraphQL input types from
 `mind-graphql/entities/query.entities.ts` into a Mongoose filter/options pair, so the two evolve
