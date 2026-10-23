@@ -1,7 +1,15 @@
 import GraphQLJSON from 'graphql-type-json';
 
 import { GraphqlAuthGatewayService } from './graphql-auth-gateway.service';
-import { createLoggerMock, EMPTY_IDENTITY, LoggerMock, resolveContext } from './graphql-auth.spec-helper';
+import { MIND_FEDERATION_CONFIG } from './graphql-federation.config';
+import {
+  createLoggerMock,
+  EMPTY_IDENTITY,
+  federationLinkOf,
+  LoggerMock,
+  NEST_10_FEDERATION_LINK,
+  resolveContext,
+} from './graphql-auth.spec-helper';
 
 // Stubs the scalar instead of installing `graphql`; see graphql-auth.spec-helper.ts for the reason
 jest.mock('graphql-type-json', () => ({ __esModule: true, default: { name: 'JSON' } }));
@@ -20,7 +28,7 @@ describe('GraphqlAuthGatewayService', () => {
       const options = await service.createGqlOptions();
 
       expect(options).toMatchObject({
-        autoSchemaFile: { path: 'schema.gql', federation: 2 },
+        autoSchemaFile: { path: 'schema.gql', federation: MIND_FEDERATION_CONFIG },
         sortSchema: true,
         playground: false,
         resolvers: { JSON: GraphQLJSON },
@@ -29,6 +37,12 @@ describe('GraphqlAuthGatewayService', () => {
       expect(options.path).toBeUndefined();
       expect(options.plugins).toHaveLength(1);
       expect(options.context).toEqual(expect.any(Function));
+    });
+
+    it('should declare the NestJS 10 federation link (v2.3, 11 directives) in the generated subgraph SDL', async () => {
+      const options = await service.createGqlOptions();
+
+      expect(federationLinkOf(options)).toBe(NEST_10_FEDERATION_LINK);
     });
   });
 

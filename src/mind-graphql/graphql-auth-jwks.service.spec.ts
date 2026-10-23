@@ -5,7 +5,15 @@ import { pathToRegexp } from 'path-to-regexp';
 import GraphQLJSON from 'graphql-type-json';
 
 import { GraphqlAuthJwksService } from './graphql-auth-jwks.service';
-import { createLoggerMock, EMPTY_IDENTITY, LoggerMock, resolveContext } from './graphql-auth.spec-helper';
+import { MIND_FEDERATION_CONFIG } from './graphql-federation.config';
+import {
+  createLoggerMock,
+  EMPTY_IDENTITY,
+  federationLinkOf,
+  LoggerMock,
+  NEST_10_FEDERATION_LINK,
+  resolveContext,
+} from './graphql-auth.spec-helper';
 
 jest.mock('axios');
 // Stubs the scalar instead of installing `graphql`; see graphql-auth.spec-helper.ts for the reason
@@ -44,7 +52,7 @@ describe('GraphqlAuthJwksService', () => {
 
       expect(options).toMatchObject({
         path: '/*splat/graphql',
-        autoSchemaFile: { path: 'schema.gql', federation: 2 },
+        autoSchemaFile: { path: 'schema.gql', federation: MIND_FEDERATION_CONFIG },
         sortSchema: true,
         playground: false,
         resolvers: { JSON: GraphQLJSON },
@@ -54,12 +62,19 @@ describe('GraphqlAuthJwksService', () => {
       expect(options.context).toEqual(expect.any(Function));
     });
 
+    it('should declare the NestJS 10 federation link (v2.3, 11 directives) in the generated subgraph SDL', async () => {
+      const options = await service.createGqlOptions();
+
+      expect(federationLinkOf(options)).toBe(NEST_10_FEDERATION_LINK);
+    });
+
     it('should use a path that Express 5 (path-to-regexp 8) accepts and that matches any prefix', async () => {
       const { path } = await service.createGqlOptions();
 
       const { regexp } = pathToRegexp(path, { end: false });
       expect(regexp.test('/user/graphql')).toBe(true);
       expect(regexp.test('/a/b/graphql')).toBe(true);
+      expect(regexp.test('/user/graphql/x')).toBe(true);
       expect(regexp.test('/graphql')).toBe(false);
     });
   });

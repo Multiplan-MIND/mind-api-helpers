@@ -2,6 +2,8 @@ import { ApolloFederationDriverConfig } from '@nestjs/apollo';
 import { ApolloServerPluginLandingPageLocalDefault } from '@apollo/server/plugin/landingPage/default';
 import GraphQLJSON from 'graphql-type-json';
 
+import { MIND_FEDERATION_CONFIG } from './graphql-federation.config';
+
 type MindGqlOptionsInput = {
   // Only the JWKS service serves under a prefix; the gateway one keeps the driver default
   path?: string;
@@ -11,7 +13,8 @@ type MindGqlOptionsInput = {
 export function buildMindGqlOptions({ path, context }: MindGqlOptionsInput): ApolloFederationDriverConfig {
   return {
     ...(path && { path }),
-    autoSchemaFile: { path: 'schema.gql', federation: 2 },
+    // Federation link pinned to v2.3 so mind-api-router (@apollo/gateway 2.4.x) can compose the subgraph
+    autoSchemaFile: { path: 'schema.gql', federation: MIND_FEDERATION_CONFIG },
     sortSchema: true,
     playground: false,
     plugins: [ApolloServerPluginLandingPageLocalDefault()],
