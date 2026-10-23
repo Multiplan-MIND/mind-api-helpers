@@ -1,3 +1,7 @@
+import { isIP } from 'net';
+
+import { isNullOrUndefined } from '../mind-helpers/validation.helper';
+
 export interface MindRequestInfo {
   ip: string | null;
   userAgent: string | null;
@@ -11,23 +15,28 @@ export interface MindRequestInfo {
   };
 }
 
-function headerValue(req: any, name: string): string | null {
+export function headerValue(req: any, name: string): string | null {
   const raw = req?.headers?.[name];
-  if (raw === undefined || raw === null) return null;
+  if (isNullOrUndefined(raw)) return null;
   const value = (Array.isArray(raw) ? raw.join(', ') : String(raw)).trim();
   return value.length ? value : null;
 }
 
-export function extractIp(req: any): string | null {
-  const forwarded = headerValue(req, 'x-forwarded-for');
-  const first = forwarded?.split(',')[0]?.trim();
-  if (first) return first;
-  return req?.ip ?? req?.socket?.remoteAddress ?? null;
+function validIp(value: unknown): string | null {
+  return typeof value === 'string' && isIP(value) ? value : null;
 }
 
-export function extractRequestInfo(req: any): MindRequestInfo {
+// `req.ip` is computed by Express from the `trust proxy` setting, so the service must configure it with
+// the number of proxies in front (e.g. `app.set('trust proxy', 1)`). X-Forwarded-For is never read
+// here: its first item is whatever the client sent.
+export function extractIp(req: any): string | null {
+  return validIp(req?.ip ?? req?.socket?.remoteAddress);
+}
+
+export function extractRequestInfo(req: any, options: { ipHeader?: string } = {}): MindRequestInfo {
+  const ip = options.ipHeader ? validIp(headerValue(req, options.ipHeader)) : extractIp(req);
   return {
-    ip: extractIp(req),
+    ip,
     userAgent: headerValue(req, 'user-agent'),
     headers: {
       acceptLanguage: headerValue(req, 'accept-language'),

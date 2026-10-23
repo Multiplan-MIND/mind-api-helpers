@@ -1,26 +1,36 @@
-import { extractIp, extractRequestInfo } from './request-info.helper';
+import { extractIp, extractRequestInfo, headerValue } from './request-info.helper';
 
 describe('request-info.helper', () => {
+  describe('headerValue', () => {
+    it('should trim, turn empty into null and join repeated headers', () => {
+      expect(headerValue({ headers: { a: '  x  ' } }, 'a')).toBe('x');
+      expect(headerValue({ headers: { a: '   ' } }, 'a')).toBeNull();
+      expect(headerValue({ headers: { a: ['x', 'y'] } }, 'a')).toBe('x, y');
+      expect(headerValue({ headers: {} }, 'a')).toBeNull();
+      expect(headerValue(undefined, 'a')).toBeNull();
+    });
+  });
+
   describe('extractIp', () => {
-    it('should use the first item of X-Forwarded-For', () => {
-      expect(extractIp({ headers: { 'x-forwarded-for': '203.0.113.7, 10.0.0.1, 10.0.0.2' } })).toBe('203.0.113.7');
+    it('should use req.ip and ignore a client-supplied X-Forwarded-For', () => {
+      expect(extractIp({ ip: '198.51.100.2', headers: { 'x-forwarded-for': '1.2.3.4' } })).toBe('198.51.100.2');
     });
 
-    it('should trim spaces and accept a single value', () => {
-      expect(extractIp({ headers: { 'x-forwarded-for': '  203.0.113.7  ' } })).toBe('203.0.113.7');
+    it('should not trust X-Forwarded-For when there is no req.ip', () => {
+      expect(extractIp({ headers: { 'x-forwarded-for': '1.2.3.4' } })).toBeNull();
     });
 
-    it('should join repeated headers (array) and take the first item', () => {
-      expect(extractIp({ headers: { 'x-forwarded-for': ['203.0.113.7', '10.0.0.1'] } })).toBe('203.0.113.7');
-    });
-
-    it('should keep IPv6 addresses', () => {
-      expect(extractIp({ headers: { 'x-forwarded-for': '2001:db8::1, 10.0.0.1' } })).toBe('2001:db8::1');
-    });
-
-    it('should fall back to req.ip then the socket when the header is empty or missing', () => {
-      expect(extractIp({ headers: { 'x-forwarded-for': ' , ' }, ip: '198.51.100.2' })).toBe('198.51.100.2');
+    it('should fall back to the socket address', () => {
       expect(extractIp({ headers: {}, socket: { remoteAddress: '198.51.100.3' } })).toBe('198.51.100.3');
+    });
+
+    it('should accept IPv6 and IPv4-mapped IPv6', () => {
+      expect(extractIp({ ip: '2001:db8::1' })).toBe('2001:db8::1');
+      expect(extractIp({ ip: '::ffff:198.51.100.2' })).toBe('::ffff:198.51.100.2');
+    });
+
+    it.each(['not-an-ip', '1.2.3.4, 5.6.7.8', '<script>', '', 42])('should return null for invalid value %p', (ip) => {
+      expect(extractIp({ ip })).toBeNull();
     });
 
     it('should return null when nothing is available', () => {
@@ -30,8 +40,9 @@ describe('request-info.helper', () => {
   });
 
   describe('extractRequestInfo', () => {
-    it('should collect user agent and fingerprint headers', () => {
+    it('should collect ip, user agent and fingerprint headers', () => {
       const info = extractRequestInfo({
+        ip: '203.0.113.7',
         headers: {
           'user-agent': 'Mozilla/5.0',
           'accept-language': 'pt-BR,pt;q=0.9',
@@ -55,6 +66,17 @@ describe('request-info.helper', () => {
           xForwardedFor: '203.0.113.7, 10.0.0.1',
         },
       });
+    });
+
+    it('should read the ip from a given trusted header instead of req.ip', () => {
+      const req = { ip: '10.0.0.9', headers: { 'mind-request-ip': '203.0.113.7' } };
+      expect(extractRequestInfo(req, { ipHeader: 'mind-request-ip' }).ip).toBe('203.0.113.7');
+    });
+
+    it('should not fall back to req.ip when the trusted header is missing or invalid', () => {
+      expect(extractRequestInfo({ ip: '10.0.0.9', headers: {} }, { ipHeader: 'mind-request-ip' }).ip).toBeNull();
+      const bad = { ip: '10.0.0.9', headers: { 'mind-request-ip': 'garbage' } };
+      expect(extractRequestInfo(bad, { ipHeader: 'mind-request-ip' }).ip).toBeNull();
     });
 
     it('should return nulls for a request without headers', () => {
