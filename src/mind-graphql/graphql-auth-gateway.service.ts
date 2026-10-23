@@ -8,6 +8,8 @@ import GraphQLJSON from 'graphql-type-json';
 import { MindLoggerService } from '../mind-logger/mind-logger.service';
 import { MindLogger } from '../mind-logger/mind-logger.decorator';
 import { logPrefix } from '../mind-logger/mind-logger.util';
+import { unauthenticatedError } from './unauthenticated.error';
+import { extractRequestInfo, headerValue } from '../mind-session/request-info.helper';
 
 @Injectable()
 export class GraphqlAuthGatewayService implements GqlOptionsFactory<ApolloFederationDriverConfig> {
@@ -29,19 +31,28 @@ export class GraphqlAuthGatewayService implements GqlOptionsFactory<ApolloFedera
     };
   }
 
+  // Behind the router: identity and client data come from headers the router sets on the subgraph request
+  // (`mind-request-ip` is the client IP the router resolved; the rest of the client headers are copied as-is).
   private mindHandleContext({ req }) {
     const _log = logPrefix('mindHandleContext');
 
-    const ctx = { mindUserId: null, mindUserRoles: null, mindSessionExpiresIn: null };
+    const ctx = {
+      mindUserId: null,
+      mindUserRoles: null,
+      mindSessionExpiresIn: null,
+      mindSessionId: null,
+      mindRequestInfo: extractRequestInfo(req, { ipHeader: 'mind-request-ip' }),
+    };
     try {
       if (req?.headers?.['mind-user-id']) {
         ctx.mindUserId = req?.headers?.['mind-user-id'];
         ctx.mindUserRoles = req?.headers?.['mind-user-roles'].split(',');
         ctx.mindSessionExpiresIn = new Date(req?.headers?.['mind-session-expires-in']);
+        ctx.mindSessionId = headerValue(req, 'mind-session-id');
       }
     } catch (e) {
       this.logger.error('Error setting context', _log, e);
-      return;
+      throw unauthenticatedError('Invalid identity headers');
     }
     return ctx;
   }
