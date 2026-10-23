@@ -21,26 +21,29 @@ const mtsLoggerFormat = format.printf(({ context, level, message, timestamp, ms,
 });
 
 export const MindLoggerFactory = (module: string): LoggerService => {
-  const consoleFormat = format.combine(
-    format.timestamp(),
-    format.ms(),
-    format.colorize(),
-    format.prettyPrint(),
-    mtsLoggerFormat,
-  );
-  const fileFormat = format.combine(format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }), format.ms(), mtsLoggerFormat);
+  const timestamp = format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' });
+  // Só NODE_ENV === 'production' desliga cor e arquivo: lá o stdout vai para o coletor de log, que não deve
+  // receber códigos ANSI, e o arquivo só ocuparia o disco. Qualquer outro valor (ou ausente) mantém os dois.
+  const isProduction = process.env.NODE_ENV === 'production';
+  const colorize = isProduction ? [] : [format.colorize()];
+  const consoleFormat = format.combine(timestamp, format.ms(), ...colorize, format.prettyPrint(), mtsLoggerFormat);
+  const fileFormat = format.combine(timestamp, format.ms(), mtsLoggerFormat);
 
   return WinstonModule.createLogger({
     level: process.env.DEBUG ? 'debug' : 'info',
     transports: [
       new transports.Console({ format: consoleFormat }),
-      new transports.File({
-        filename: `logs/${module}.log`,
-        format: fileFormat,
-        maxsize: 1024 * 1000 * 200, // 204,8mb
-        maxFiles: 1,
-        tailable: true,
-      }),
+      ...(isProduction
+        ? []
+        : [
+            new transports.File({
+              filename: `logs/${module}.log`,
+              format: fileFormat,
+              maxsize: 1024 * 1000 * 200, // 204,8mb
+              maxFiles: 1,
+              tailable: true,
+            }),
+          ]),
     ],
   });
 };
