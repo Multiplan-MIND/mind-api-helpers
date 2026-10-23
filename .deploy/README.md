@@ -436,13 +436,16 @@ O script busca e consolida changelogs automaticamente. Para que funcione correta
 
 ```markdown
 ## Changelog:
-
+<!-- changelog:start -->
 - Descrição da mudança 1
 - Descrição da mudança 2
 - Descrição da mudança 3
+<!-- changelog:end -->
 ```
 
-**Dica**: Use templates de PR que já incluam a seção `## Changelog:` para facilitar.
+Apenas as linhas `- ` entre os marcadores `<!-- changelog:start -->` e `<!-- changelog:end -->` são coletadas. PRs sem marcadores continuam funcionando: o script lê os itens `- ` logo após `## Changelog:` até a primeira linha que não seja item nem vazia.
+
+**Dica**: Use o template de PR (`.github/pull_request_template.md`), que já inclui a seção e os marcadores.
 
 #### ⚠️ Atenções e Boas Práticas
 
@@ -630,7 +633,7 @@ git push
 
 ##### Changelog não é detectado
 
-- Verifique o formato no PR (deve ter `## Changelog:`)
+- Verifique o formato no PR (itens `- ` entre os marcadores `<!-- changelog:start -->` e `<!-- changelog:end -->`, ou logo após `## Changelog:`)
 - Adicione manualmente aos PRs de release se necessário:
   ```bash
   gh pr edit 123 --body "$(cat changelog.md)"
