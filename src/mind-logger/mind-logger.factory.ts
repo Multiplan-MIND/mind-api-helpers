@@ -22,19 +22,18 @@ const mtsLoggerFormat = format.printf(({ context, level, message, timestamp, ms,
 
 export const MindLoggerFactory = (module: string): LoggerService => {
   const timestamp = format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' });
-  // Cor só com terminal (desenvolvimento): no pod o stdout vai para o coletor de log, que não deve receber códigos ANSI.
-  const colorize = process.stdout.isTTY ? [format.colorize()] : [];
+  // Só NODE_ENV === 'production' desliga cor e arquivo: lá o stdout vai para o coletor de log, que não deve
+  // receber códigos ANSI, e o arquivo só ocuparia o disco. Qualquer outro valor (ou ausente) mantém os dois.
+  const isProduction = process.env.NODE_ENV === 'production';
+  const colorize = isProduction ? [] : [format.colorize()];
   const consoleFormat = format.combine(timestamp, format.ms(), ...colorize, format.prettyPrint(), mtsLoggerFormat);
   const fileFormat = format.combine(timestamp, format.ms(), mtsLoggerFormat);
-
-  // O Kubernetes injeta essa variável em todo pod. Lá o coletor lê o stdout, e o arquivo só ocuparia o disco do nó.
-  const inKubernetes = !!process.env.KUBERNETES_SERVICE_HOST;
 
   return WinstonModule.createLogger({
     level: process.env.DEBUG ? 'debug' : 'info',
     transports: [
       new transports.Console({ format: consoleFormat }),
-      ...(inKubernetes
+      ...(isProduction
         ? []
         : [
             new transports.File({
