@@ -92,7 +92,10 @@ inside `beforeEach` (see `mind-logger.service.spec.ts`).
 `MindLoggerService` is `Scope.TRANSIENT` and lazy: `loggerService` is undefined until `setModule()`
 builds the winston logger, and every method uses `?.`, so logging before `setModule()` is a silent
 no-op. `MindLoggerFactory` writes to `logs/<module>.log` **relative to `process.cwd()`** and switches
-the level to `debug` when `process.env.DEBUG` is set. `logPrefix(method, infos)` builds the
+the level to `debug` when `process.env.DEBUG` is set. Colour and the `File` transport are controlled
+**only** by `process.env.NODE_ENV`: exactly `'production'` → no `colorize` and no `File` transport
+(console only); any other value, or unset → `colorize` and `logs/<module>.log`. `isTTY` and
+`KUBERNETES_SERVICE_HOST` are no longer consulted. `logPrefix(method, infos)` builds the
 `pid|method#info1;info2` string that every call site passes as `prefix`.
 
 ### `mind-helpers/error.helper.ts`
