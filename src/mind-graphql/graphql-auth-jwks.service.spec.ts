@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { ApolloServer, HeaderMap } from '@apollo/server';
 import * as jwkToPem from 'jwk-to-pem';
 import * as jwt from 'jsonwebtoken';
 
@@ -9,6 +10,8 @@ import { RsaKeys, createLoggerMock, createRedisMock, createRsaKeys, signToken } 
 jest.mock('graphql-type-json', () => ({ __esModule: true, default: {} }));
 jest.mock('axios');
 const mockedAxios = axios as jest.Mocked<typeof axios>;
+
+const UNAUTHENTICATED = { extensions: { code: 'UNAUTHENTICATED', http: { status: 401 } } };
 
 describe('GraphqlAuthJwksService', () => {
   const keys: RsaKeys = createRsaKeys('kid-1');
@@ -39,15 +42,20 @@ describe('GraphqlAuthJwksService', () => {
     redis.eval.mockResolvedValue(0); // session not revoked
     logger = createLoggerMock();
     mockedAxios.get.mockReset();
-    service = new GraphqlAuthJwksService(logger as any, redis as any);
-    context = (await service.createGqlOptions()).context as any;
+    await buildService();
   });
 
+  // SESSION_REQUIRE_SID is read once, at construction
+  const buildService = async () => {
+    service = new GraphqlAuthJwksService(logger as any, redis as any);
+    context = (await service.createGqlOptions()).context as any;
+  };
+
   it('should expose request info even without Authorization header', async () => {
-    const ctx = await context({ req: reqWith(undefined, { 'x-forwarded-for': '203.0.113.7' }) });
+    const ctx = await context({ req: { ...reqWith(undefined, { 'x-forwarded-for': '1.2.3.4' }), ip: '203.0.113.7' } });
 
     expect(ctx.mindUserId).toBeNull();
-    expect(ctx.mindRequestInfo.ip).toBe('203.0.113.7');
+    expect(ctx.mindRequestInfo.ip).toBe('203.0.113.7'); // never the client-supplied X-Forwarded-For
     expect(ctx.mindRequestInfo.userAgent).toBe('jest');
   });
 
@@ -70,72 +78,89 @@ describe('GraphqlAuthJwksService', () => {
     expect(redis.eval).toHaveBeenCalledWith(expect.stringContaining('EXISTS'), 0, 'mind:session:revoked:sess-1');
   });
 
-  it('should reject (undefined context) when the session is revoked', async () => {
+  it('should reject with 401 UNAUTHENTICATED when the session is revoked, logging ip and user agent', async () => {
     redis.eval.mockResolvedValue(1);
     const token = signToken(keys, validPayload({ sid: 'sess-1' }));
 
-    await expect(context({ req: reqWith(token) })).resolves.toBeUndefined();
-    expect(redis.eval).toHaveBeenCalled();
-    expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('Session revoked'), expect.any(String));
+    await expect(context({ req: { ...reqWith(token), ip: '203.0.113.7' } })).rejects.toMatchObject(UNAUTHENTICATED);
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.stringMatching(/Session revoked: sess-1 \(ip: 203\.0\.113\.7, user-agent: jest\)/),
+      expect.any(String),
+    );
   });
 
   it('should fail closed when Redis fails during the revocation check', async () => {
     redis.eval.mockRejectedValue(new Error('redis down'));
     const token = signToken(keys, validPayload({ sid: 'sess-1' }));
 
-    await expect(context({ req: reqWith(token) })).resolves.toBeUndefined();
-    expect(logger.error).toHaveBeenCalled();
+    await expect(context({ req: reqWith(token) })).rejects.toMatchObject(UNAUTHENTICATED);
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.stringContaining('fail-closed'),
+      expect.any(String),
+      expect.any(Error),
+    );
   });
 
   describe('token without sid (transition)', () => {
-    it('should accept with a warning when SESSION_REQUIRE_SID is not true', async () => {
+    it('should accept (debug log only) when SESSION_REQUIRE_SID is not set', async () => {
       const token = signToken(keys, validPayload());
 
       const ctx = await context({ req: reqWith(token) });
 
       expect(ctx.mindUserId).toBe('u1');
       expect(ctx.mindSessionId).toBeNull();
-      expect(logger.warn).toHaveBeenCalled();
+      expect(logger.warn).not.toHaveBeenCalled();
       expect(redis.eval).not.toHaveBeenCalled();
     });
 
-    it('should accept when SESSION_REQUIRE_SID is "false"', async () => {
-      process.env.SESSION_REQUIRE_SID = 'false';
+    it.each(['false', '0', '', '  FALSE '])('should accept when SESSION_REQUIRE_SID is %j', async (value) => {
+      process.env.SESSION_REQUIRE_SID = value;
+      await buildService();
       const token = signToken(keys, validPayload());
 
       expect((await context({ req: reqWith(token) })).mindUserId).toBe('u1');
     });
 
-    it('should reject when SESSION_REQUIRE_SID is "true"', async () => {
-      process.env.SESSION_REQUIRE_SID = 'true';
-      const token = signToken(keys, validPayload());
+    it.each(['true', 'TRUE', 'True', '1', ' true '])(
+      'should reject with 401 when SESSION_REQUIRE_SID is %j',
+      async (value) => {
+        process.env.SESSION_REQUIRE_SID = value;
+        await buildService();
+        const token = signToken(keys, validPayload());
 
-      await expect(context({ req: reqWith(token) })).resolves.toBeUndefined();
-    });
+        await expect(context({ req: reqWith(token) })).rejects.toMatchObject(UNAUTHENTICATED);
+      },
+    );
 
-    it.each(['TRUE', 'True', '1', ' true '])('should reject when SESSION_REQUIRE_SID is %j', async (value) => {
+    it.each(['yes', 'on', 'ture', '2'])('should fail at construction when SESSION_REQUIRE_SID is %j', (value) => {
       process.env.SESSION_REQUIRE_SID = value;
-      const token = signToken(keys, validPayload());
-
-      await expect(context({ req: reqWith(token) })).resolves.toBeUndefined();
+      expect(() => new GraphqlAuthJwksService(logger as any, redis as any)).toThrow(/Invalid SESSION_REQUIRE_SID/);
     });
+  });
 
-    it.each(['false', '0', '', 'yes'])('should stay lenient when SESSION_REQUIRE_SID is %j', async (value) => {
-      process.env.SESSION_REQUIRE_SID = value;
-      const token = signToken(keys, validPayload());
+  describe('invalid sid claim', () => {
+    it.each([
+      ['empty string', ''],
+      ['blank', '  '],
+      ['number', 0],
+      ['null', null],
+      ['object', {}],
+    ])('should reject (never treat as legacy) when sid is %s', async (_name, sid) => {
+      const token = signToken(keys, validPayload({ sid }));
 
-      expect((await context({ req: reqWith(token) })).mindUserId).toBe('u1');
+      await expect(context({ req: reqWith(token) })).rejects.toMatchObject(UNAUTHENTICATED);
+      expect(redis.eval).not.toHaveBeenCalled();
     });
   });
 
   describe('token validation', () => {
     it('should reject a malformed token', async () => {
-      await expect(context({ req: reqWith('not-a-jwt') })).resolves.toBeUndefined();
+      await expect(context({ req: reqWith('not-a-jwt') })).rejects.toMatchObject(UNAUTHENTICATED);
     });
 
     it('should reject a token signed with another key', async () => {
       const token = signToken(otherKeys, validPayload({ sid: 's' }));
-      await expect(context({ req: reqWith(token) })).resolves.toBeUndefined();
+      await expect(context({ req: reqWith(token) })).rejects.toMatchObject(UNAUTHENTICATED);
     });
 
     it('should reject a token signed with an unexpected algorithm (HS256 with the public PEM)', async () => {
@@ -143,12 +168,12 @@ describe('GraphqlAuthJwksService', () => {
         algorithm: 'HS256',
         keyid: 'kid-1',
       });
-      await expect(context({ req: reqWith(forged) })).resolves.toBeUndefined();
+      await expect(context({ req: reqWith(forged) })).rejects.toMatchObject(UNAUTHENTICATED);
     });
 
     it('should reject a validly signed token whose algorithm is not RS256', async () => {
       const token = signToken(keys, validPayload({ sid: 's' }), { algorithm: 'RS384' });
-      await expect(context({ req: reqWith(token) })).resolves.toBeUndefined();
+      await expect(context({ req: reqWith(token) })).rejects.toMatchObject(UNAUTHENTICATED);
     });
 
     it('should return an empty identity when mindSessionExpiresIn is in the past', async () => {
@@ -195,7 +220,7 @@ describe('GraphqlAuthJwksService', () => {
       mockedAxios.get.mockRejectedValue(new Error('network'));
       const token = signToken(keys, validPayload({ sid: 's' }));
 
-      await expect(context({ req: reqWith(token) })).resolves.toBeUndefined();
+      await expect(context({ req: reqWith(token) })).rejects.toMatchObject(UNAUTHENTICATED);
     });
 
     it('should reject when the kid is not in the JWKS', async () => {
@@ -203,8 +228,31 @@ describe('GraphqlAuthJwksService', () => {
       mockedAxios.get.mockResolvedValue({ data: { keys: [{ ...keys.jwk, kid: 'other' }] } });
       const token = signToken(keys, validPayload({ sid: 's' }));
 
-      await expect(context({ req: reqWith(token) })).resolves.toBeUndefined();
+      await expect(context({ req: reqWith(token) })).rejects.toMatchObject(UNAUTHENTICATED);
     });
+  });
+
+  it('should answer 401 through Apollo Server (not an anonymous 200) when the context rejects', async () => {
+    redis.eval.mockResolvedValue(1);
+    const token = signToken(keys, validPayload({ sid: 'sess-1' }));
+    const server = new ApolloServer({
+      typeDefs: 'type Query { hello: String }',
+      resolvers: { Query: { hello: () => 'hi' } },
+    });
+    await server.start();
+
+    const response = await server.executeHTTPGraphQLRequest({
+      httpGraphQLRequest: {
+        method: 'POST',
+        headers: new HeaderMap([['content-type', 'application/json']]),
+        search: '',
+        body: { query: '{ hello }' },
+      },
+      context: () => context({ req: reqWith(token) }),
+    });
+    await server.stop();
+
+    expect(response.status).toBe(401);
   });
 
   it('should expose the federation options', async () => {

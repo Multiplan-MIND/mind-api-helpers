@@ -22,7 +22,8 @@ describe('GraphqlAuthGatewayService', () => {
           'mind-user-roles': 'admin,user-viewer',
           'mind-session-expires-in': '2030-01-01T00:00:00.000Z',
           'mind-session-id': 'sess-1',
-          'x-forwarded-for': '203.0.113.7',
+          'mind-request-ip': '203.0.113.7',
+          'x-forwarded-for': '1.2.3.4',
         },
       },
     });
@@ -32,6 +33,17 @@ describe('GraphqlAuthGatewayService', () => {
     expect(ctx.mindSessionExpiresIn).toEqual(new Date('2030-01-01T00:00:00.000Z'));
     expect(ctx.mindSessionId).toBe('sess-1');
     expect(ctx.mindRequestInfo.ip).toBe('203.0.113.7');
+  });
+
+  it('should ignore X-Forwarded-For and req.ip (the router address) for the client ip', () => {
+    const ctx = context({ req: { ip: '10.0.0.9', headers: { 'x-forwarded-for': '1.2.3.4' } } });
+    expect(ctx.mindRequestInfo.ip).toBeNull();
+  });
+
+  it('should normalize mind-session-id like the other headers', () => {
+    const base = { 'mind-user-id': 'u1', 'mind-user-roles': 'admin', 'mind-session-expires-in': '2030-01-01' };
+    expect(context({ req: { headers: { ...base, 'mind-session-id': '  sess-1 ' } } }).mindSessionId).toBe('sess-1');
+    expect(context({ req: { headers: { ...base, 'mind-session-id': '' } } }).mindSessionId).toBeNull();
   });
 
   it('should leave mindSessionId null when the header is absent', () => {
@@ -47,8 +59,10 @@ describe('GraphqlAuthGatewayService', () => {
     expect(ctx.mindRequestInfo.userAgent).toBe('jest');
   });
 
-  it('should return undefined and log when roles header is missing', () => {
-    expect(context({ req: { headers: { 'mind-user-id': 'u1' } } })).toBeUndefined();
+  it('should throw 401 UNAUTHENTICATED and log when roles header is missing', () => {
+    expect(() => context({ req: { headers: { 'mind-user-id': 'u1' } } })).toThrow(
+      expect.objectContaining({ extensions: { code: 'UNAUTHENTICATED', http: { status: 401 } } }),
+    );
     expect(logger.error).toHaveBeenCalled();
   });
 
