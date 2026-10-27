@@ -1,25 +1,37 @@
 import { ignoreIncomingRequest, parseIgnorePaths } from './ignore-paths';
 
 describe('ignore-paths', () => {
-  it('returns only /health/live when the variable is unset or blank', () => {
-    expect(parseIgnorePaths(undefined)).toEqual(['/health/live']);
-    expect(parseIgnorePaths('  ')).toEqual(['/health/live']);
+  it('returns no extra path when the variable is unset or blank', () => {
+    expect(parseIgnorePaths(undefined)).toEqual([]);
+    expect(parseIgnorePaths('  ')).toEqual([]);
   });
 
-  it('adds trimmed extra paths after the default, without duplicates', () => {
-    expect(parseIgnorePaths(' /ping , /health/live,/ready ')).toEqual(['/health/live', '/ping', '/ready']);
+  it('returns the trimmed extra paths, without duplicates', () => {
+    expect(parseIgnorePaths(' /ping , /ready,/ping ')).toEqual(['/ping', '/ready']);
   });
 
-  it('ignores the exact path, with or without a query string', () => {
-    const ignore = ignoreIncomingRequest(['/health/live']);
+  it('ignores the health routes under any prefix, with or without a query string', () => {
+    const ignore = ignoreIncomingRequest([]);
+    expect(ignore({ url: '/health' })).toBe(true);
     expect(ignore({ url: '/health/live' })).toBe(true);
-    expect(ignore({ url: '/health/live?probe=1' })).toBe(true);
+    expect(ignore({ url: '/concierge/health' })).toBe(true);
+    expect(ignore({ url: '/mind-api-concierge/feature-x/health?probe=1' })).toBe(true);
+    expect(ignore({ url: '/api/health/live' })).toBe(true);
   });
 
-  it('does not ignore other paths, prefixes or a missing url', () => {
-    const ignore = ignoreIncomingRequest(['/health/live']);
+  it('ignores the exact extra paths, with or without a query string', () => {
+    const ignore = ignoreIncomingRequest(['/ping']);
+    expect(ignore({ url: '/ping' })).toBe(true);
+    expect(ignore({ url: '/ping?probe=1' })).toBe(true);
+  });
+
+  it('does not ignore other paths, look-alike segments, prefixes of extras or a missing url', () => {
+    const ignore = ignoreIncomingRequest(['/ping']);
     expect(ignore({ url: '/health/trace' })).toBe(false);
     expect(ignore({ url: '/health/liveness' })).toBe(false);
+    expect(ignore({ url: '/healthz' })).toBe(false);
+    expect(ignore({ url: '/unhealth' })).toBe(false);
+    expect(ignore({ url: '/ping/deep' })).toBe(false);
     expect(ignore({})).toBe(false);
   });
 });
