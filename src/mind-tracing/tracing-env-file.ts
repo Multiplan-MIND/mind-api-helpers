@@ -1,12 +1,12 @@
 import { existsSync, readFileSync } from 'fs';
 import * as util from 'util';
 
-const TRACING_PREFIXES = ['OTEL_', 'MIND_TRACING_'];
+const TRACING_PREFIXES = ['OTEL_', 'TRACING_'];
 
 type ParseEnv = (content: string) => Record<string, string>;
 
 /**
- * Copies the tracing variables (`OTEL_*` and `MIND_TRACING_*`) from the `.env` file in the working directory into
+ * Copies the tracing variables (`OTEL_*` and `TRACING_*`) from the `.env` file in the working directory into
  * `env`, without overriding values already set. `register` runs before the service reads its `.env`, so variables
  * kept only in that file would otherwise arrive too late and tracing would stay off. Only the tracing variables are
  * copied, so the rest of the service configuration is still read the way the service already reads it.

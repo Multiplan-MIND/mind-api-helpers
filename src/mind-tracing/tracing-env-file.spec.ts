@@ -14,14 +14,14 @@ describe('loadTracingEnvFile', () => {
 
   afterEach(() => rmSync(directory, { recursive: true, force: true }));
 
-  it('copies only the OTEL_ and MIND_TRACING_ variables', () => {
+  it('copies only the OTEL_ and TRACING_ variables', () => {
     writeFileSync(
       envFile,
-      'OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318\nMIND_TRACING_IGNORE_PATHS=/ping\nMONGO_HOSTS=db:27017\n',
+      'OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318\nTRACING_IGNORE_PATHS=/ping\nMONGO_HOSTS=db:27017\n',
     );
     const env: NodeJS.ProcessEnv = {};
     loadTracingEnvFile(envFile, env);
-    expect(env).toEqual({ OTEL_EXPORTER_OTLP_ENDPOINT: 'http://localhost:4318', MIND_TRACING_IGNORE_PATHS: '/ping' });
+    expect(env).toEqual({ OTEL_EXPORTER_OTLP_ENDPOINT: 'http://localhost:4318', TRACING_IGNORE_PATHS: '/ping' });
   });
 
   it('keeps values already set in the environment', () => {

@@ -42,7 +42,7 @@ export function startTracing(env: NodeJS.ProcessEnv = process.env): NodeSDK | un
       traceExporter: new OTLPTraceExporter(),
       instrumentations: [
         new HttpInstrumentation({
-          ignoreIncomingRequestHook: ignoreIncomingRequest(parseIgnorePaths(env.MIND_TRACING_IGNORE_PATHS)),
+          ignoreIncomingRequestHook: ignoreIncomingRequest(parseIgnorePaths(env.TRACING_IGNORE_PATHS)),
         }),
         new ExpressInstrumentation(),
         new NestInstrumentation(),

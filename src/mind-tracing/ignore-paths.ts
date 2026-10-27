@@ -6,7 +6,7 @@ const DEFAULT_IGNORED_SUFFIXES = ['/health', '/health/live'];
 
 /**
  * Builds the list of extra paths that must not be traced from `raw` (a comma-separated list, usually
- * MIND_TRACING_IGNORE_PATHS). The health routes are always ignored, see `ignoreIncomingRequest`.
+ * TRACING_IGNORE_PATHS). The health routes are always ignored, see `ignoreIncomingRequest`.
  */
 export function parseIgnorePaths(raw?: string): string[] {
   const extras = (raw ?? '')

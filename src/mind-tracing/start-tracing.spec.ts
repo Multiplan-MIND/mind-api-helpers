@@ -70,8 +70,8 @@ describe('startTracing', () => {
     expect((globalThis as { AI_SDK_TELEMETRY_INTEGRATIONS?: unknown[] }).AI_SDK_TELEMETRY_INTEGRATIONS).toBeUndefined();
   });
 
-  it('wires the ignore hook into the HTTP instrumentation, with MIND_TRACING_IGNORE_PATHS added', () => {
-    startTracing({ ...enabled, MIND_TRACING_IGNORE_PATHS: '/ping' });
+  it('wires the ignore hook into the HTTP instrumentation, with TRACING_IGNORE_PATHS added', () => {
+    startTracing({ ...enabled, TRACING_IGNORE_PATHS: '/ping' });
     const { ignoreIncomingRequestHook } = (HttpInstrumentation as unknown as jest.Mock).mock.calls[0][0];
     expect(ignoreIncomingRequestHook({ url: '/concierge/health' })).toBe(true);
     expect(ignoreIncomingRequestHook({ url: '/ping' })).toBe(true);

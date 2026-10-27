@@ -254,7 +254,7 @@ Nos dois casos, nada que carregue `mongoose` ou `@nestjs/*` pode ser carregado a
 | Runtime do Node | `runtime-node` | event loop, heap e GC (`nodejs.eventloop.*`, `v8js.*`) |
 | AI SDK (`ai` >= 7) | integração própria | spans e métricas de IA, ver abaixo |
 
-As rotas de saúde não geram trace: qualquer caminho terminado em `/health` ou `/health/live`, com qualquer prefixo (`/concierge/health`, `/<projeto>/<branch>/health`). `MIND_TRACING_IGNORE_PATHS` acrescenta caminhos exatos.
+As rotas de saúde não geram trace: qualquer caminho terminado em `/health` ou `/health/live`, com qualquer prefixo (`/concierge/health`, `/<projeto>/<branch>/health`). `TRACING_IGNORE_PATHS` acrescenta caminhos exatos.
 
 #### AI SDK
 
@@ -270,7 +270,7 @@ Quando a chamada de log acontece dentro de um span, o `MindLoggerService` acresc
 
 O SDK fica desligado quando `OTEL_EXPORTER_OTLP_ENDPOINT` não está definida ou quando `OTEL_SDK_DISABLED=true`; nesse caso nada do SDK é carregado. Se o SDK falhar ao iniciar, uma linha vai para o `stderr` e a aplicação segue sem telemetria. Falhas de exportação (endpoint errado, coletor fora do ar) também vão para o `stderr`, mas só a primeira; defina `OTEL_LOG_LEVEL` para controlar você mesmo os diagnósticos do OpenTelemetry (nesse caso a biblioteca não instala o logger dela).
 
-O `register` roda antes de o `ConfigModule`/`dotenv` ler o `.env`. Por isso ele mesmo lê o `.env` do diretório de trabalho, quando existe, e copia só as variáveis `OTEL_*` e `MIND_TRACING_*` que ainda não estão no ambiente; o resto do arquivo continua sendo lido pelo serviço como antes. Isso exige Node 20.12 ou mais novo (`util.parseEnv`); em versão anterior, só vale o ambiente real do processo.
+O `register` roda antes de o `ConfigModule`/`dotenv` ler o `.env`. Por isso ele mesmo lê o `.env` do diretório de trabalho, quando existe, e copia só as variáveis `OTEL_*` e `TRACING_*` que ainda não estão no ambiente; o resto do arquivo continua sendo lido pelo serviço como antes. Isso exige Node 20.12 ou mais novo (`util.parseEnv`); em versão anterior, só vale o ambiente real do processo.
 
 | Variável | Efeito |
 | --- | --- |
@@ -281,7 +281,7 @@ O `register` roda antes de o `ConfigModule`/`dotenv` ler o `.env`. Por isso ele 
 | `OTEL_METRICS_EXPORTER` | assume `otlp` se ausente: as métricas vão ao mesmo endpoint dos traces, que precisa aceitar `/v1/metrics` (um coletor, não o Tempo direto); `none` desliga |
 | `OTEL_LOGS_EXPORTER` | assume `none` se ausente: o log segue pelo stdout e pelo arquivo |
 | `OTEL_TRACES_SAMPLER` / `OTEL_TRACES_SAMPLER_ARG` | amostragem no serviço; quando o coletor deriva métricas dos spans, mantenha 100% no serviço e amostre no coletor |
-| `MIND_TRACING_IGNORE_PATHS` | lista separada por vírgula de caminhos exatos sem trace; **soma-se** às rotas de saúde |
+| `TRACING_IGNORE_PATHS` | lista separada por vírgula de caminhos exatos sem trace; **soma-se** às rotas de saúde |
 
 No `SIGTERM` o módulo descarrega os spans e as métricas pendentes (espera no máximo 5 s) e reenvia o sinal, para o processo encerrar normalmente. Se o serviço registrar o próprio handler de `SIGTERM`, o reenvio não acontece e o encerramento fica a cargo desse handler.
 
@@ -293,7 +293,7 @@ As versões do OpenTelemetry são fixas na linha que ainda instala em Node 20, p
 
 ## Variáveis de ambiente
 
-A biblioteca lê as três variáveis abaixo, e quem as define é o serviço que a consome (ela não carrega o `.env` para elas). As variáveis de observabilidade (`OTEL_*` e `MIND_TRACING_IGNORE_PATHS`) estão na seção [Observabilidade](#observabilidade-opentelemetry):
+A biblioteca lê as três variáveis abaixo, e quem as define é o serviço que a consome (ela não carrega o `.env` para elas). As variáveis de observabilidade (`OTEL_*` e `TRACING_IGNORE_PATHS`) estão na seção [Observabilidade](#observabilidade-opentelemetry):
 
 | Variável   | Efeito                                                                    |
 | ---------- | ------------------------------------------------------------------------- |
