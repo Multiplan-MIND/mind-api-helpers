@@ -1,4 +1,5 @@
 import { LoggerService } from '@nestjs/common';
+import { Span, trace } from '@opentelemetry/api';
 import { Test } from '@nestjs/testing';
 
 import { createMindLoggerProviders } from './mind-logger.providers';
@@ -193,6 +194,19 @@ describe('MindLoggerService', () => {
       mindLoggerService.info('Test Info without prefix');
 
       expect(winston.log).toHaveBeenCalledWith('Test Info without prefix', { module: 'TestModule', prefix: undefined });
+    });
+
+    it('should add the trace id of the active span', () => {
+      const traceId = '0af7651916cd43dd8448eb211c80319c';
+      const span = { spanContext: () => ({ traceId, spanId: 'b7ad6b7169203331', traceFlags: 1 }) } as Span;
+      const getActiveSpan = jest.spyOn(trace, 'getActiveSpan').mockReturnValue(span);
+
+      mindLoggerService.info('Test Info', prefix);
+      mindLoggerService.error('Test Error', prefix, new Error('Errorrrr'));
+
+      expect(winston.log).toHaveBeenCalledWith('Test Info', { module: 'TestModule', prefix, traceId });
+      expect(lastError().context).toEqual({ module: 'TestModule', prefix, traceId });
+      getActiveSpan.mockRestore();
     });
   });
 

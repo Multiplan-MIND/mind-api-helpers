@@ -14,10 +14,12 @@ const formatMeta = (meta) => {
   return '';
 };
 
+// The trace id goes last and only when the call ran inside a span, so the fields before it keep their positions.
 const mtsLoggerFormat = format.printf(({ context, level, message, timestamp, ms, ...meta }) => {
+  const traceId = context?.traceId ? ` | trace_id=${context.traceId}` : '';
   return `${timestamp} [${context?.module || context}][${level}][${context?.prefix || ''}] ${message} | ${
     meta && formatMeta(meta)
-  } | ${ms}`;
+  } | ${ms}${traceId}`;
 });
 
 export const MindLoggerFactory = (module: string): LoggerService => {
