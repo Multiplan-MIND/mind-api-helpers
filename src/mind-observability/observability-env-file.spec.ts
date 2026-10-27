@@ -1,14 +1,14 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { loadTracingEnvFile } from './tracing-env-file';
+import { loadObservabilityEnvFile } from './observability-env-file';
 
-describe('loadTracingEnvFile', () => {
+describe('loadObservabilityEnvFile', () => {
   let directory: string;
   let envFile: string;
 
   beforeEach(() => {
-    directory = mkdtempSync(join(tmpdir(), 'mind-tracing-'));
+    directory = mkdtempSync(join(tmpdir(), 'mind-observability-'));
     envFile = join(directory, '.env');
   });
 
@@ -20,27 +20,27 @@ describe('loadTracingEnvFile', () => {
       'OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318\nTRACING_IGNORE_PATHS=/ping\nMONGO_HOSTS=db:27017\n',
     );
     const env: NodeJS.ProcessEnv = {};
-    loadTracingEnvFile(envFile, env);
+    loadObservabilityEnvFile(envFile, env);
     expect(env).toEqual({ OTEL_EXPORTER_OTLP_ENDPOINT: 'http://localhost:4318', TRACING_IGNORE_PATHS: '/ping' });
   });
 
   it('keeps values already set in the environment', () => {
     writeFileSync(envFile, 'OTEL_SERVICE_NAME=from-file\n');
     const env: NodeJS.ProcessEnv = { OTEL_SERVICE_NAME: 'from-environment' };
-    loadTracingEnvFile(envFile, env);
+    loadObservabilityEnvFile(envFile, env);
     expect(env.OTEL_SERVICE_NAME).toBe('from-environment');
   });
 
   it('does nothing without the file', () => {
     const env: NodeJS.ProcessEnv = {};
-    loadTracingEnvFile(join(directory, 'missing.env'), env);
+    loadObservabilityEnvFile(join(directory, 'missing.env'), env);
     expect(env).toEqual({});
   });
 
   it('writes one stderr line and keeps going when the file cannot be read', () => {
     const write = jest.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const env: NodeJS.ProcessEnv = {};
-    loadTracingEnvFile(directory, env);
+    loadObservabilityEnvFile(directory, env);
     expect(env).toEqual({});
     expect(write).toHaveBeenCalledTimes(1);
     write.mockRestore();

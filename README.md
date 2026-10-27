@@ -13,7 +13,7 @@ Biblioteca interna de apoio dos serviços MIND, escrita em NestJS. Não é uma a
 | `mind-helpers`  | `MindError`, `toError()`, `jsonError()` e `isNullOrUndefined()`                                                            |
 | `mind-graphql`  | `GraphqlAuthJwksService` e `GraphqlAuthGatewayService` (Apollo Federation 2) e os _input types_ de consulta                |
 | `mind-mongoose` | `getQuery()` / `getOptions()`, que traduzem os _inputs_ GraphQL em filtro e opções do Mongoose                             |
-| `mind-tracing`  | traces e métricas do OpenTelemetry sem código no serviço (`register`, `currentTraceId()`), ver [Observabilidade](#observabilidade-opentelemetry) |
+| `mind-observability`  | traces e métricas do OpenTelemetry sem código no serviço (`register`, `currentTraceId()`), ver [Observabilidade](#observabilidade-opentelemetry) |
 
 Tudo o que é público passa pelo _barrel_ `src/index.ts`: um arquivo novo só fica visível para os
 serviços quando é reexportado lá.
@@ -219,22 +219,22 @@ GraphQLModule.forRootAsync<ApolloFederationDriverConfig>({
 
 ### Observabilidade (OpenTelemetry)
 
-O módulo `mind-tracing` liga o SDK do OpenTelemetry e envia traces e métricas por OTLP/HTTP a um coletor (Grafana Alloy ou OpenTelemetry Collector), sem nenhuma linha de instrumentação no serviço. O serviço só carrega o `register` antes da aplicação e define as variáveis abaixo.
+O módulo `mind-observability` liga o SDK do OpenTelemetry e envia traces e métricas por OTLP/HTTP a um coletor (Grafana Alloy ou OpenTelemetry Collector), sem nenhuma linha de instrumentação no serviço. O serviço só carrega o `register` antes da aplicação e define as variáveis abaixo.
 
 #### Ativação
 
 A forma recomendada é carregar o `register` no comando que inicia a aplicação, sem mudar o código:
 
 ```bash
-node -r mind-api-helpers/dist/mind-tracing/register dist/main.js
+node -r mind-api-helpers/dist/mind-observability/register dist/main.js
 ```
 
-No Dockerfile isso vai no `CMD` (por exemplo `CMD ["node", "-r", "mind-api-helpers/dist/mind-tracing/register", "dist/main.js"]`). Evite colocar o `-r` no `NODE_OPTIONS`: a variável vale para todo processo Node do contêiner (`yarn`, CLI do Nest, migrations, scripts), e cada um subiria um SDK e mandaria telemetria em nome do serviço.
+No Dockerfile isso vai no `CMD` (por exemplo `CMD ["node", "-r", "mind-api-helpers/dist/mind-observability/register", "dist/main.js"]`). Evite colocar o `-r` no `NODE_OPTIONS`: a variável vale para todo processo Node do contêiner (`yarn`, CLI do Nest, migrations, scripts), e cada um subiria um SDK e mandaria telemetria em nome do serviço.
 
 A alternativa é importar o `register` na primeira linha do `main.ts`:
 
 ```ts
-import 'mind-api-helpers/dist/mind-tracing/register';
+import 'mind-api-helpers/dist/mind-observability/register';
 import { NestFactory } from '@nestjs/core';
 ```
 
@@ -264,7 +264,7 @@ Prompt, resposta, argumentos e resultado de ferramenta **nunca** são gravados, 
 
 #### Log
 
-Quando a chamada de log acontece dentro de um span, o `MindLoggerService` acrescenta ` | trace_id=<id>` ao fim da linha. Os campos anteriores não mudam de posição, e sem tracing a linha fica igual.
+Quando a chamada de log acontece dentro de um span, o `MindLoggerService` acrescenta ` | trace_id=<id>` ao fim da linha. Os campos anteriores não mudam de posição, e sem telemetria a linha fica igual.
 
 #### Variáveis
 

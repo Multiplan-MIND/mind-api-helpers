@@ -13,7 +13,7 @@ const SHUTDOWN_TIMEOUT_MS = 5000;
  *
  * The `env` parameter is meant for tests: the defaults set below only reach `NodeSDK` when `env` is `process.env`.
  */
-export function startTracing(env: NodeJS.ProcessEnv = process.env): NodeSDK | undefined {
+export function startObservability(env: NodeJS.ProcessEnv = process.env): NodeSDK | undefined {
   if (env.OTEL_SDK_DISABLED === 'true' || !env.OTEL_EXPORTER_OTLP_ENDPOINT) {
     return undefined;
   }
@@ -57,13 +57,15 @@ export function startTracing(env: NodeJS.ProcessEnv = process.env): NodeSDK | un
       ],
     });
     sdk.start();
-    registerAiSdkTelemetry(trace.getTracer('mind-tracing'), metrics.getMeter('mind-tracing'));
+    registerAiSdkTelemetry(trace.getTracer('mind-observability'), metrics.getMeter('mind-observability'));
     registerExportErrorLogger(env);
     registerShutdown(sdk);
     return sdk;
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
-    process.stderr.write(`[mind-tracing] failed to start OpenTelemetry, continuing without tracing: ${message}\n`);
+    process.stderr.write(
+      `[mind-observability] failed to start OpenTelemetry, continuing without telemetry: ${message}\n`,
+    );
     return undefined;
   }
 }
@@ -87,7 +89,7 @@ function registerExportErrorLogger(env: NodeJS.ProcessEnv): void {
           return;
         }
         logged = true;
-        process.stderr.write(`[mind-tracing] OpenTelemetry error (further errors are not logged): ${message}\n`);
+        process.stderr.write(`[mind-observability] OpenTelemetry error (further errors are not logged): ${message}\n`);
       },
       warn: noop,
       info: noop,

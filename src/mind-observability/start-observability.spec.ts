@@ -1,7 +1,7 @@
 import { diag } from '@opentelemetry/api';
 import { NodeSDK } from '@opentelemetry/sdk-node';
 import { HttpInstrumentation } from '@opentelemetry/instrumentation-http';
-import { startTracing } from './start-tracing';
+import { startObservability } from './start-observability';
 
 const mockSdkFactory = jest.fn();
 
@@ -25,7 +25,7 @@ jest.mock('@opentelemetry/instrumentation-runtime-node', () => ({ RuntimeNodeIns
 const enabled = { OTEL_EXPORTER_OTLP_ENDPOINT: 'http://tempo:4318' };
 const flushPromises = () => new Promise<void>((resolve) => jest.requireActual('timers').setImmediate(resolve));
 
-describe('startTracing', () => {
+describe('startObservability', () => {
   let kill: jest.SpyInstance;
 
   beforeEach(() => {
@@ -42,36 +42,36 @@ describe('startTracing', () => {
   });
 
   it('does nothing and never loads the SDK without the endpoint', () => {
-    expect(startTracing({})).toBeUndefined();
+    expect(startObservability({})).toBeUndefined();
     expect(mockSdkFactory).not.toHaveBeenCalled();
     expect(NodeSDK).not.toHaveBeenCalled();
   });
 
   it('does nothing when OTEL_SDK_DISABLED is "true"', () => {
-    expect(startTracing({ ...enabled, OTEL_SDK_DISABLED: 'true' })).toBeUndefined();
+    expect(startObservability({ ...enabled, OTEL_SDK_DISABLED: 'true' })).toBeUndefined();
     expect(NodeSDK).not.toHaveBeenCalled();
   });
 
   it('starts the SDK once with the nine instrumentations', () => {
-    const sdk = startTracing({ ...enabled });
+    const sdk = startObservability({ ...enabled });
     expect(NodeSDK).toHaveBeenCalledTimes(1);
     expect((NodeSDK as unknown as jest.Mock).mock.calls[0][0].instrumentations).toHaveLength(9);
     expect(sdk.start).toHaveBeenCalledTimes(1);
   });
 
   it('registers one AI SDK telemetry integration when the SDK starts', () => {
-    startTracing({ ...enabled });
+    startObservability({ ...enabled });
     const integrations = (globalThis as { AI_SDK_TELEMETRY_INTEGRATIONS?: unknown[] }).AI_SDK_TELEMETRY_INTEGRATIONS;
     expect(integrations).toHaveLength(1);
   });
 
   it('does not register the AI SDK integration without the endpoint', () => {
-    startTracing({});
+    startObservability({});
     expect((globalThis as { AI_SDK_TELEMETRY_INTEGRATIONS?: unknown[] }).AI_SDK_TELEMETRY_INTEGRATIONS).toBeUndefined();
   });
 
   it('wires the ignore hook into the HTTP instrumentation, with TRACING_IGNORE_PATHS added', () => {
-    startTracing({ ...enabled, TRACING_IGNORE_PATHS: '/ping' });
+    startObservability({ ...enabled, TRACING_IGNORE_PATHS: '/ping' });
     const { ignoreIncomingRequestHook } = (HttpInstrumentation as unknown as jest.Mock).mock.calls[0][0];
     expect(ignoreIncomingRequestHook({ url: '/concierge/health' })).toBe(true);
     expect(ignoreIncomingRequestHook({ url: '/ping' })).toBe(true);
@@ -80,14 +80,14 @@ describe('startTracing', () => {
 
   it('defaults the metrics exporter to otlp and the logs exporter to none', () => {
     const env: NodeJS.ProcessEnv = { ...enabled };
-    startTracing(env);
+    startObservability(env);
     expect(env.OTEL_METRICS_EXPORTER).toBe('otlp');
     expect(env.OTEL_LOGS_EXPORTER).toBe('none');
   });
 
   it('keeps explicit exporter values', () => {
     const env: NodeJS.ProcessEnv = { ...enabled, OTEL_METRICS_EXPORTER: 'none', OTEL_LOGS_EXPORTER: 'otlp' };
-    startTracing(env);
+    startObservability(env);
     expect(env.OTEL_METRICS_EXPORTER).toBe('none');
     expect(env.OTEL_LOGS_EXPORTER).toBe('otlp');
   });
@@ -97,7 +97,7 @@ describe('startTracing', () => {
       throw new Error('boom');
     });
     const write = jest.spyOn(process.stderr, 'write').mockImplementation(() => true);
-    expect(startTracing({ ...enabled })).toBeUndefined();
+    expect(startObservability({ ...enabled })).toBeUndefined();
     expect(write).toHaveBeenCalledTimes(1);
     write.mockRestore();
   });
@@ -114,7 +114,7 @@ describe('startTracing', () => {
     });
 
     it('writes exactly one stderr line for the first OpenTelemetry error and ignores later ones', () => {
-      startTracing({ ...enabled });
+      startObservability({ ...enabled });
       diag.error('boom');
       diag.error('second');
       expect(write).toHaveBeenCalledTimes(1);
@@ -123,27 +123,27 @@ describe('startTracing', () => {
     });
 
     it('ignores levels other than error', () => {
-      startTracing({ ...enabled });
+      startObservability({ ...enabled });
       diag.warn('careful');
       diag.info('fyi');
       expect(write).not.toHaveBeenCalled();
     });
 
-    it('does not install the logger when tracing is disabled', () => {
-      startTracing({ ...enabled, OTEL_SDK_DISABLED: 'true' });
+    it('does not install the logger when telemetry is disabled', () => {
+      startObservability({ ...enabled, OTEL_SDK_DISABLED: 'true' });
       diag.error('boom');
       expect(write).not.toHaveBeenCalled();
     });
 
     it('does not install the logger when OTEL_LOG_LEVEL is set', () => {
-      startTracing({ ...enabled, OTEL_LOG_LEVEL: 'info' });
+      startObservability({ ...enabled, OTEL_LOG_LEVEL: 'info' });
       diag.error('boom');
       expect(write).not.toHaveBeenCalled();
     });
   });
 
   it('flushes on SIGTERM and re-raises it when the app has no handler of its own', async () => {
-    const sdk = startTracing({ ...enabled });
+    const sdk = startObservability({ ...enabled });
     (sdk.shutdown as jest.Mock).mockResolvedValue(undefined);
     process.emit('SIGTERM');
     await flushPromises();
@@ -152,7 +152,7 @@ describe('startTracing', () => {
   });
 
   it('does not re-raise SIGTERM when the app registered its own handler', async () => {
-    const sdk = startTracing({ ...enabled });
+    const sdk = startObservability({ ...enabled });
     (sdk.shutdown as jest.Mock).mockResolvedValue(undefined);
     process.on('SIGTERM', jest.fn());
     process.emit('SIGTERM');
@@ -163,7 +163,7 @@ describe('startTracing', () => {
 
   it('stops waiting for a stuck shutdown after 5 s', async () => {
     jest.useFakeTimers();
-    const sdk = startTracing({ ...enabled });
+    const sdk = startObservability({ ...enabled });
     (sdk.shutdown as jest.Mock).mockReturnValue(new Promise(() => undefined));
     process.emit('SIGTERM');
     expect(kill).not.toHaveBeenCalled();

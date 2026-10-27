@@ -1,7 +1,7 @@
 import { Injectable, LoggerService, Scope } from '@nestjs/common';
 import { MindLoggerFactory } from './mind-logger.factory';
 import { jsonError } from '../mind-helpers/error.helper';
-import { currentTraceId } from '../mind-tracing/trace-id';
+import { currentTraceId } from '../mind-observability/trace-id';
 
 @Injectable({
   scope: Scope.TRANSIENT,
