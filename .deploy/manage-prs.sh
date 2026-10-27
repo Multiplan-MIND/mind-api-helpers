@@ -125,7 +125,13 @@ while true; do
             fi
 
             # Extrair changelog do corpo do PR
-            changelog_lines=$(printf '%s' "$pr_body" | tr -d '\r' | sed -n '/## Changelog:/,/^[[:space:]]*$/p' | grep '^- ')
+            pr_body_clean=$(printf '%s\n' "$pr_body" | tr -d '\r')
+            if grep -q '<!-- changelog:start -->' <<<"$pr_body_clean"; then
+                changelog_lines=$(sed -n '/<!-- changelog:start -->/,/<!-- changelog:end -->/p' <<<"$pr_body_clean" | grep '^- ')
+            else
+                # PRs sem marcadores: lê a partir de "## Changelog:" até a primeira linha que não seja item nem vazia
+                changelog_lines=$(awk '/^## Changelog:/{f=1;next} f&&NF&&!/^- /{exit} f&&/^- /' <<<"$pr_body_clean")
+            fi
 
             echo ""
             echo -e "${BLUE}Informações do PR #$pr_number:${NC}"
