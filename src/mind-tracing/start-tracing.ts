@@ -109,7 +109,8 @@ function registerShutdown(sdk: NodeSDK): void {
       timer = setTimeout(resolve, SHUTDOWN_TIMEOUT_MS);
       timer.unref();
     });
-    Promise.race([sdk.shutdown().catch(() => undefined), timeout]).then(() => {
+    // Neither branch of the race rejects, so there is nothing left to handle after the re-raise.
+    void Promise.race([sdk.shutdown().catch(() => undefined), timeout]).then(() => {
       clearTimeout(timer);
       if (process.listenerCount('SIGTERM') === 0) {
         process.kill(process.pid, 'SIGTERM');
