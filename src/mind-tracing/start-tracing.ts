@@ -1,5 +1,6 @@
-import { diag, DiagLogLevel } from '@opentelemetry/api';
+import { diag, DiagLogLevel, metrics, trace } from '@opentelemetry/api';
 import type { NodeSDK } from '@opentelemetry/sdk-node';
+import { registerAiSdkTelemetry } from './ai-sdk-telemetry';
 import { ignoreIncomingRequest, parseIgnorePaths } from './ignore-paths';
 
 const SHUTDOWN_TIMEOUT_MS = 5000;
@@ -17,8 +18,9 @@ export function startTracing(env: NodeJS.ProcessEnv = process.env): NodeSDK | un
     return undefined;
   }
 
-  // NodeSDK starts default metrics and logs OTLP exporters that spam connection errors when nothing listens.
-  env.OTEL_METRICS_EXPORTER ??= 'none';
+  // Metrics go to the same collector as the traces. Logs stay off: the log line already goes to stdout and the file,
+  // and NodeSDK's default logs exporter would spam connection errors against a collector that does not take logs.
+  env.OTEL_METRICS_EXPORTER ??= 'otlp';
   env.OTEL_LOGS_EXPORTER ??= 'none';
 
   try {
@@ -31,6 +33,9 @@ export function startTracing(env: NodeJS.ProcessEnv = process.env): NodeSDK | un
     const { MongoDBInstrumentation } = require('@opentelemetry/instrumentation-mongodb');
     const { IORedisInstrumentation } = require('@opentelemetry/instrumentation-ioredis');
     const { AmqplibInstrumentation } = require('@opentelemetry/instrumentation-amqplib');
+    const { UndiciInstrumentation } = require('@opentelemetry/instrumentation-undici');
+    const { GraphQLInstrumentation } = require('@opentelemetry/instrumentation-graphql');
+    const { RuntimeNodeInstrumentation } = require('@opentelemetry/instrumentation-runtime-node');
     /* eslint-enable @typescript-eslint/no-var-requires */
 
     const sdk: NodeSDK = new Sdk({
@@ -44,9 +49,15 @@ export function startTracing(env: NodeJS.ProcessEnv = process.env): NodeSDK | un
         new MongoDBInstrumentation(),
         new IORedisInstrumentation(),
         new AmqplibInstrumentation(),
+        // fetch, which the http instrumentation does not see.
+        new UndiciInstrumentation(),
+        // Resolver spans would multiply the spans of every query; the execute span already carries the operation.
+        new GraphQLInstrumentation({ ignoreResolveSpans: true }),
+        new RuntimeNodeInstrumentation(),
       ],
     });
     sdk.start();
+    registerAiSdkTelemetry(trace.getTracer('mind-tracing'), metrics.getMeter('mind-tracing'));
     registerExportErrorLogger(env);
     registerShutdown(sdk);
     return sdk;

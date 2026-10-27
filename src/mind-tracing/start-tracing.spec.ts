@@ -18,6 +18,9 @@ jest.mock('@opentelemetry/instrumentation-nestjs-core', () => ({ NestInstrumenta
 jest.mock('@opentelemetry/instrumentation-mongodb', () => ({ MongoDBInstrumentation: jest.fn() }));
 jest.mock('@opentelemetry/instrumentation-ioredis', () => ({ IORedisInstrumentation: jest.fn() }));
 jest.mock('@opentelemetry/instrumentation-amqplib', () => ({ AmqplibInstrumentation: jest.fn() }));
+jest.mock('@opentelemetry/instrumentation-undici', () => ({ UndiciInstrumentation: jest.fn() }));
+jest.mock('@opentelemetry/instrumentation-graphql', () => ({ GraphQLInstrumentation: jest.fn() }));
+jest.mock('@opentelemetry/instrumentation-runtime-node', () => ({ RuntimeNodeInstrumentation: jest.fn() }));
 
 const enabled = { OTEL_EXPORTER_OTLP_ENDPOINT: 'http://tempo:4318' };
 const flushPromises = () => new Promise<void>((resolve) => jest.requireActual('timers').setImmediate(resolve));
@@ -31,6 +34,7 @@ describe('startTracing', () => {
   });
 
   afterEach(() => {
+    delete (globalThis as { AI_SDK_TELEMETRY_INTEGRATIONS?: unknown[] }).AI_SDK_TELEMETRY_INTEGRATIONS;
     diag.disable();
     process.removeAllListeners('SIGTERM');
     kill.mockRestore();
@@ -48,23 +52,41 @@ describe('startTracing', () => {
     expect(NodeSDK).not.toHaveBeenCalled();
   });
 
-  it('starts the SDK once with the six instrumentations', () => {
+  it('starts the SDK once with the nine instrumentations', () => {
     const sdk = startTracing({ ...enabled });
     expect(NodeSDK).toHaveBeenCalledTimes(1);
-    expect((NodeSDK as unknown as jest.Mock).mock.calls[0][0].instrumentations).toHaveLength(6);
+    expect((NodeSDK as unknown as jest.Mock).mock.calls[0][0].instrumentations).toHaveLength(9);
     expect(sdk.start).toHaveBeenCalledTimes(1);
+  });
+
+  it('registers one AI SDK telemetry integration when the SDK starts', () => {
+    startTracing({ ...enabled });
+    const integrations = (globalThis as { AI_SDK_TELEMETRY_INTEGRATIONS?: unknown[] }).AI_SDK_TELEMETRY_INTEGRATIONS;
+    expect(integrations).toHaveLength(1);
+  });
+
+  it('does not register the AI SDK integration without the endpoint', () => {
+    startTracing({});
+    expect((globalThis as { AI_SDK_TELEMETRY_INTEGRATIONS?: unknown[] }).AI_SDK_TELEMETRY_INTEGRATIONS).toBeUndefined();
   });
 
   it('wires the ignore hook into the HTTP instrumentation, with MIND_TRACING_IGNORE_PATHS added', () => {
     startTracing({ ...enabled, MIND_TRACING_IGNORE_PATHS: '/ping' });
     const { ignoreIncomingRequestHook } = (HttpInstrumentation as unknown as jest.Mock).mock.calls[0][0];
-    expect(ignoreIncomingRequestHook({ url: '/health/live' })).toBe(true);
+    expect(ignoreIncomingRequestHook({ url: '/concierge/health' })).toBe(true);
     expect(ignoreIncomingRequestHook({ url: '/ping' })).toBe(true);
     expect(ignoreIncomingRequestHook({ url: '/health/trace' })).toBe(false);
   });
 
-  it('defaults the metrics and logs exporters to none and keeps explicit values', () => {
-    const env: NodeJS.ProcessEnv = { ...enabled, OTEL_LOGS_EXPORTER: 'otlp' };
+  it('defaults the metrics exporter to otlp and the logs exporter to none', () => {
+    const env: NodeJS.ProcessEnv = { ...enabled };
+    startTracing(env);
+    expect(env.OTEL_METRICS_EXPORTER).toBe('otlp');
+    expect(env.OTEL_LOGS_EXPORTER).toBe('none');
+  });
+
+  it('keeps explicit exporter values', () => {
+    const env: NodeJS.ProcessEnv = { ...enabled, OTEL_METRICS_EXPORTER: 'none', OTEL_LOGS_EXPORTER: 'otlp' };
     startTracing(env);
     expect(env.OTEL_METRICS_EXPORTER).toBe('none');
     expect(env.OTEL_LOGS_EXPORTER).toBe('otlp');
