@@ -1,12 +1,16 @@
 import { diag, DiagLogLevel, metrics, trace } from '@opentelemetry/api';
 import type { NodeSDK } from '@opentelemetry/sdk-node';
-import { registerAiSdkTelemetry } from './ai-sdk-telemetry';
-import { ignoreIncomingRequest, parseIgnorePaths } from './ignore-paths';
+import { registerAiSdkIntegration } from './ai-sdk-telemetry';
+import { createAiSdkMetrics } from './metrics/ai-sdk-metrics';
+import { createMetricsInstrumentations } from './metrics/metrics-instrumentations';
+import { createAiSdkTracing } from './tracing/ai-sdk-tracing';
+import { createTracingInstrumentations } from './tracing/tracing-instrumentations';
 
 const SHUTDOWN_TIMEOUT_MS = 5000;
 
 /**
- * Starts the OpenTelemetry SDK when OTEL_EXPORTER_OTLP_ENDPOINT is set and OTEL_SDK_DISABLED is not "true".
+ * Starts the OpenTelemetry SDK, with the tracing and the metrics instrumentations, when OTEL_EXPORTER_OTLP_ENDPOINT is
+ * set and OTEL_SDK_DISABLED is not "true".
  * Otherwise it does nothing and loads nothing from the SDK. The SDK and the instrumentations are loaded with
  * `require` inside this function, after those checks, so a disabled service pays no cost for them.
  * An SDK failure is reported on stderr and never stops the application. So is the first export failure.
@@ -27,37 +31,15 @@ export function startObservability(env: NodeJS.ProcessEnv = process.env): NodeSD
     /* eslint-disable @typescript-eslint/no-var-requires */
     const { NodeSDK: Sdk } = require('@opentelemetry/sdk-node');
     const { OTLPTraceExporter } = require('@opentelemetry/exporter-trace-otlp-http');
-    const { HttpInstrumentation } = require('@opentelemetry/instrumentation-http');
-    const { ExpressInstrumentation } = require('@opentelemetry/instrumentation-express');
-    const { NestInstrumentation } = require('@opentelemetry/instrumentation-nestjs-core');
-    const { MongoDBInstrumentation } = require('@opentelemetry/instrumentation-mongodb');
-    const { IORedisInstrumentation } = require('@opentelemetry/instrumentation-ioredis');
-    const { AmqplibInstrumentation } = require('@opentelemetry/instrumentation-amqplib');
-    const { UndiciInstrumentation } = require('@opentelemetry/instrumentation-undici');
-    const { GraphQLInstrumentation } = require('@opentelemetry/instrumentation-graphql');
-    const { RuntimeNodeInstrumentation } = require('@opentelemetry/instrumentation-runtime-node');
     /* eslint-enable @typescript-eslint/no-var-requires */
 
     const sdk: NodeSDK = new Sdk({
       traceExporter: new OTLPTraceExporter(),
-      instrumentations: [
-        new HttpInstrumentation({
-          ignoreIncomingRequestHook: ignoreIncomingRequest(parseIgnorePaths(env.TRACING_IGNORE_PATHS)),
-        }),
-        new ExpressInstrumentation(),
-        new NestInstrumentation(),
-        new MongoDBInstrumentation(),
-        new IORedisInstrumentation(),
-        new AmqplibInstrumentation(),
-        // fetch, which the http instrumentation does not see.
-        new UndiciInstrumentation(),
-        // Resolver spans would multiply the spans of every query; the execute span already carries the operation.
-        new GraphQLInstrumentation({ ignoreResolveSpans: true }),
-        new RuntimeNodeInstrumentation(),
-      ],
+      instrumentations: [...createTracingInstrumentations(env), ...createMetricsInstrumentations()],
     });
     sdk.start();
-    registerAiSdkTelemetry(trace.getTracer('mind-observability'), metrics.getMeter('mind-observability'));
+    registerAiSdkIntegration(createAiSdkTracing(trace.getTracer('mind-observability')));
+    registerAiSdkIntegration(createAiSdkMetrics(metrics.getMeter('mind-observability')));
     registerExportErrorLogger(env);
     registerShutdown(sdk);
     return sdk;
@@ -101,7 +83,7 @@ function registerExportErrorLogger(env: NodeJS.ProcessEnv): void {
 }
 
 /**
- * Flushes pending spans on SIGTERM (waiting at most 5 s). A SIGTERM listener disables Node's default
+ * Flushes pending spans and metrics on SIGTERM (waiting at most 5 s). A SIGTERM listener disables Node's default
  * exit-on-SIGTERM, so the signal is re-raised afterwards, unless the application has its own handler.
  */
 function registerShutdown(sdk: NodeSDK): void {

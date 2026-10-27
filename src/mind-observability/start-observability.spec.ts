@@ -59,10 +59,10 @@ describe('startObservability', () => {
     expect(sdk.start).toHaveBeenCalledTimes(1);
   });
 
-  it('registers one AI SDK telemetry integration when the SDK starts', () => {
+  it('registers the AI SDK tracing and metrics integrations when the SDK starts', () => {
     startObservability({ ...enabled });
     const integrations = (globalThis as { AI_SDK_TELEMETRY_INTEGRATIONS?: unknown[] }).AI_SDK_TELEMETRY_INTEGRATIONS;
-    expect(integrations).toHaveLength(1);
+    expect(integrations).toHaveLength(2);
   });
 
   it('does not register the AI SDK integration without the endpoint', () => {

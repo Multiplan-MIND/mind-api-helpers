@@ -13,7 +13,7 @@ Biblioteca interna de apoio dos serviços MIND, escrita em NestJS. Não é uma a
 | `mind-helpers`  | `MindError`, `toError()`, `jsonError()` e `isNullOrUndefined()`                                                            |
 | `mind-graphql`  | `GraphqlAuthJwksService` e `GraphqlAuthGatewayService` (Apollo Federation 2) e os _input types_ de consulta                |
 | `mind-mongoose` | `getQuery()` / `getOptions()`, que traduzem os _inputs_ GraphQL em filtro e opções do Mongoose                             |
-| `mind-observability`  | traces e métricas do OpenTelemetry sem código no serviço (`register`, `currentTraceId()`), ver [Observabilidade](#observabilidade-opentelemetry) |
+| `mind-observability`  | traces (`tracing/`) e métricas (`metrics/`) do OpenTelemetry sem código no serviço (`register`, `currentTraceId()`), ver [Observabilidade](#observabilidade-opentelemetry) |
 
 Tudo o que é público passa pelo _barrel_ `src/index.ts`: um arquivo novo só fica visível para os
 serviços quando é reexportado lá.
@@ -258,7 +258,7 @@ As rotas de saúde não geram trace: qualquer caminho terminado em `/health` ou 
 
 #### AI SDK
 
-Com o SDK ligado, o módulo registra uma integração de telemetria no registro global do AI SDK (`globalThis.AI_SDK_TELEMETRY_INTEGRATIONS`), que o `ai` 7 usa em toda chamada de `generateText`, `streamText`, `generateObject` e `embed`. Cada chamada vira um span `invoke_agent <modelo>`, com um filho `chat <modelo>` por ida ao modelo (tokens, motivo de término, modelo da resposta) e um filho `execute_tool <ferramenta>` por execução de ferramenta. A requisição ao provedor roda dentro do span `chat` e a ferramenta dentro do span `execute_tool`, então as chamadas HTTP, de banco e de fila que elas fazem aparecem aninhadas. As métricas seguem as convenções GenAI: `gen_ai.client.token.usage` (por `gen_ai.token.type`) e `gen_ai.client.operation.duration`.
+Com o SDK ligado, o módulo registra duas integrações de telemetria no registro global do AI SDK, uma para traces e outra para métricas (`globalThis.AI_SDK_TELEMETRY_INTEGRATIONS`), que o `ai` 7 usa em toda chamada de `generateText`, `streamText`, `generateObject` e `embed`. Cada chamada vira um span `invoke_agent <modelo>`, com um filho `chat <modelo>` por ida ao modelo (tokens, motivo de término, modelo da resposta) e um filho `execute_tool <ferramenta>` por execução de ferramenta. A requisição ao provedor roda dentro do span `chat` e a ferramenta dentro do span `execute_tool`, então as chamadas HTTP, de banco e de fila que elas fazem aparecem aninhadas. As métricas seguem as convenções GenAI: `gen_ai.client.token.usage` (por `gen_ai.token.type`) e `gen_ai.client.operation.duration`.
 
 Prompt, resposta, argumentos e resultado de ferramenta **nunca** são gravados, porque carregam dado de cliente. Um serviço que passe `telemetry.integrations` ou `telemetry.isEnabled: false` na chamada substitui a integração global e não gera esses spans. A biblioteca não depende do pacote `ai`: um serviço sem ele só fica com uma lista global não usada.
 
