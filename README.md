@@ -141,7 +141,13 @@ Dois detalhes que costumam gerar dúvida:
   `forRoot()` transforma essa lista em providers. Se a classe decorada ainda não tiver sido importada
   quando o `forRoot()` roda, o provider não é criado e o Nest reclama de `MindLoggerService<Nome>`
   ausente — quase sempre é ordem de importação, não erro de digitação.
-- O logger grava em `logs/<módulo>.log` **relativo ao diretório de execução** do processo.
+- O logger grava em `logs/<módulo>.log` **relativo ao diretório de execução** do processo — mas só fora
+  de produção. Cor e arquivo dependem **apenas** do `NODE_ENV`:
+
+  | `NODE_ENV`                      | cor no console | arquivo `logs/<módulo>.log` |
+  | ------------------------------- | -------------- | --------------------------- |
+  | exatamente `production`         | não            | não (só console)            |
+  | qualquer outro valor ou ausente | sim            | sim                         |
 
 ### GraphQL
 
@@ -230,11 +236,12 @@ await isSessionRevoked(redis, sid); // true enquanto a chave existir
 
 ## Variáveis de ambiente
 
-A biblioteca lê apenas três — quem as define é o serviço que a consome (ela não carrega `.env`):
+A biblioteca lê apenas quatro — quem as define é o serviço que a consome (ela não carrega `.env`):
 
 | Variável              | Efeito                                                                                                                             |
 | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
 | `DEBUG`               | qualquer valor definido sobe o nível do logger de `info` para `debug`                                                              |
+| `NODE_ENV`            | `production` desliga a cor e o arquivo de log; outro valor mantém os dois                                                          |
 | `JWKS_URL`            | endereço do documento JWKS usado pelo `GraphqlAuthJwksService`                                                                     |
 | `SESSION_REQUIRE_SID` | `true`/`1` rejeita tokens sem `sid`; `false`/`0`/vazio os aceita (sem diferenciar maiúsculas, com trim); outro valor falha no boot |
 
