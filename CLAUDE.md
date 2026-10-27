@@ -6,8 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A private, internal NestJS support library (`mind-api-helpers`) shared by the `mind-api-*` /
 `multi-api-*` services. It ships no application, no `main.ts` and no HTTP server — only the logger,
-the GraphQL bootstrap services, the error helpers and the Mongoose query builder that those services
-import.
+the GraphQL bootstrap services, the error helpers, the Mongoose query builder and the OpenTelemetry
+entry point that those services import.
 
 Everything public goes through the barrel `src/index.ts`. A new file is invisible to consumers until
 it is re-exported there.
@@ -76,7 +76,8 @@ Consequences to keep in mind when touching `package.json`:
 ## Architecture
 
 Dependency direction is one-way: `mind-helpers` ← `mind-logger` ← `mind-graphql` / `mind-mongoose`.
-`mind-helpers` imports nothing internal, so it is the safe place for shared primitives.
+`mind-helpers` imports nothing internal, so it is the safe place for shared primitives. `mind-logger` also
+imports `mind-tracing/trace-id`, a leaf that depends only on `@opentelemetry/api`.
 
 ### `mind-logger` — the decorator/registry pattern
 
@@ -148,37 +149,20 @@ the GraphQL defaults (`limit: 10`, sort by `updatedAt` desc) when they are.
 
 ### `mind-tracing` — OpenTelemetry entry point
 
-`startTracing(env = process.env)` (`start-tracing.ts`) starts the OpenTelemetry `NodeSDK` with the OTLP/HTTP trace
-exporter and six instrumentations (http, express, nestjs-core, mongodb, ioredis, amqplib). `register.ts` is only
-a `startTracing()` call; consumers load it as `mind-api-helpers/dist/mind-tracing/register` on the first line of
-`main.ts`.
+`startTracing(env = process.env)` (`start-tracing.ts`) starts the OpenTelemetry `NodeSDK` with the OTLP/HTTP trace exporter, the OTLP metrics exporter and nine instrumentations (http, express, nestjs-core, mongodb, ioredis, amqplib, undici, graphql, runtime-node), then registers the AI SDK integration. `register.ts` calls `loadTracingEnvFile()` and `startTracing()`; consumers load it with `node -r mind-api-helpers/dist/mind-tracing/register dist/main.js` (preferred, no code change) or as the first import of `main.ts`. `NODE_OPTIONS` is discouraged because every Node process in the container (yarn, Nest CLI, migrations) would start an SDK under the service name.
 
-- **`register` is not exported from `src/index.ts` on purpose.** The barrel imports `mongoose` at load time, and
-  the instrumentations can only patch a module that has not been loaded yet. Re-exporting it would defeat the
-  import order.
-- The SDK, the exporter and the instrumentations are loaded with `require` **inside** `startTracing`, after the
-  disabled / no-endpoint checks, so nothing from `@opentelemetry/sdk-node` is loaded when tracing is off. Use
-  `import type` for their types. `dist/mind-tracing/register.js` loaded without env must not put `sdk-node` in
-  `require.cache`.
-- `OTEL_METRICS_EXPORTER` and `OTEL_LOGS_EXPORTER` default to `none` on the given `env`: NodeSDK 0.223 would
-  otherwise start metrics/logs OTLP exporters against `localhost:4318` and spam connection errors.
-- `OTEL_*` and `MIND_TRACING_IGNORE_PATHS` must be in the real process environment: `register` runs on the first
-  line of `main.ts`, before `ConfigModule`/`dotenv` read `.env`, so values that exist only in `.env` arrive too
-  late and tracing stays silently off.
-- Export errors go to OpenTelemetry's diag error handler, and `NodeSDK` installs a diag logger only when
-  `OTEL_LOG_LEVEL` is set. When it is not, `startTracing` installs an ERROR-level logger that writes the first
-  error to stderr and ignores the rest. The `env` parameter is meant for tests: the defaults only reach `NodeSDK`
-  when `env` is `process.env`.
-- Consumers should keep `"resolutions": { "@opentelemetry/api": "1.9.0" }` (check with `yarn why
-  @opentelemetry/api`): two copies (1.9.0 and a newer 1.x) can leave the SDK and the instrumentations not seeing
-  each other.
-- A `SIGTERM` listener disables Node's default exit-on-SIGTERM, so the handler flushes (5 s cap, unref'd timer)
-  and re-raises `SIGTERM` only when `process.listenerCount('SIGTERM') === 0`.
-- **Pinned versions (no `^`):** `@opentelemetry/api` 1.9.0, `sdk-node` 0.223.0, `exporter-trace-otlp-http` 0.223.0,
-  `instrumentation-http` 0.223.0, `instrumentation-express` 0.71.1, `instrumentation-nestjs-core` 0.70.0,
-  `instrumentation-mongodb` 0.76.0, `instrumentation-ioredis` 0.71.0, `instrumentation-amqplib` 0.70.0. Newer
-  releases require Node >= 22.15, so **Node 20 (`.nvmrc`) caps these versions**; do not bump them without
-  moving the Node floor of the consuming services.
+- **`register` is not exported from `src/index.ts` on purpose.** The barrel imports `mongoose` at load time, and the instrumentations can only patch a module that has not been loaded yet. Re-exporting it would defeat the load order.
+- The SDK, the exporters and the instrumentations are loaded with `require` **inside** `startTracing`, after the disabled / no-endpoint checks, so nothing from `@opentelemetry/sdk-node` is loaded when tracing is off. Use `import type` for their types. `dist/mind-tracing/register.js` loaded without env must not put `sdk-node` in `require.cache`. `ai-sdk-telemetry.ts` and `trace-id.ts` import only `@opentelemetry/api`, which is safe to load eagerly.
+- `OTEL_METRICS_EXPORTER` defaults to `otlp` and `OTEL_LOGS_EXPORTER` to `none` on the given `env`. Metrics therefore go to the same endpoint as traces, which must be a collector that accepts `/v1/metrics`. The `env` parameter is meant for tests: the defaults only reach `NodeSDK` when `env` is `process.env`.
+- `loadTracingEnvFile()` (`tracing-env-file.ts`) copies only `OTEL_*` and `MIND_TRACING_*` from `.env` in the working directory into `process.env`, never overriding values already set, because `register` runs before `ConfigModule`/`dotenv`. It uses `util.parseEnv` (Node >= 20.12) and does nothing without it.
+- `ignore-paths.ts` ignores any incoming path ending in `/health` or `/health/live` (services mount health under a per-environment prefix), plus the exact paths in `MIND_TRACING_IGNORE_PATHS`.
+- `ai-sdk-telemetry.ts` implements the AI SDK 7 telemetry integration interface without depending on `ai`: it pushes an object into `globalThis.AI_SDK_TELEMETRY_INTEGRATIONS`, which `ai` reads on every call that has no `telemetry.integrations` of its own. It emits `invoke_agent <model>` / `chat <model>` / `execute_tool <name>` spans and the `gen_ai.client.token.usage` / `gen_ai.client.operation.duration` histograms, following the GenAI semantic conventions. `executeLanguageModelCall` and `executeTool` run the provider request and the tool inside their spans, so HTTP/DB spans nest under them. **It never records prompts, replies, tool arguments or tool results**, and the spec asserts it. The event types are local, minimal shapes: when bumping across `ai` majors, check the `Telemetry` interface in `ai`'s `index.d.ts`. The AI SDK swallows exceptions thrown by integrations (`notify`), so a shape mismatch loses spans, not requests.
+- `MindLoggerService` reads `currentTraceId()` at the call site (winston may format later, outside the span) and passes it as `context.traceId`; `mtsLoggerFormat` appends ` | trace_id=<id>` only when present, so existing field positions never move. `mind-logger` therefore depends on `mind-tracing/trace-id`, which depends only on `@opentelemetry/api`.
+- Export errors go to OpenTelemetry's diag error handler, and `NodeSDK` installs a diag logger only when `OTEL_LOG_LEVEL` is set. When it is not, `startTracing` installs an ERROR-level logger that writes the first error to stderr and ignores the rest.
+- Consumers should keep `"resolutions": { "@opentelemetry/api": "1.9.0" }` (check with `yarn why @opentelemetry/api`): two copies (1.9.0 and a newer 1.x) can leave the SDK and the instrumentations not seeing each other.
+- A `SIGTERM` listener disables Node's default exit-on-SIGTERM, so the handler flushes (5 s cap, unref'd timer) and re-raises `SIGTERM` only when `process.listenerCount('SIGTERM') === 0`.
+- **Pinned versions (no `^`):** `@opentelemetry/api` 1.9.0, `sdk-node` 0.223.0, `exporter-trace-otlp-http` 0.223.0, `instrumentation-http` 0.223.0, `instrumentation-express` 0.71.1, `instrumentation-nestjs-core` 0.70.0, `instrumentation-mongodb` 0.76.0, `instrumentation-ioredis` 0.71.0, `instrumentation-amqplib` 0.70.0, `instrumentation-undici` 0.33.0, `instrumentation-graphql` 0.71.0, `instrumentation-runtime-node` 0.36.1. All of them depend on `@opentelemetry/instrumentation` 0.223.x, so there is a single copy of it. Newer releases require Node >= 22.15, and consumers still run Node 20, so **these versions stay on the 0.223 line**; do not bump them without moving the Node floor of the consuming services. The package itself declares no `engines`.
+- Tests use the real `BasicTracerProvider` with an `InMemorySpanExporter` and the `AsyncLocalStorageContextManager` (`sdk-trace-base` and `context-async-hooks` 2.12.0 in `devDependencies`) where span parentage matters.
 
 ## Conventions and gotchas
 

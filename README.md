@@ -13,6 +13,7 @@ Biblioteca interna de apoio dos serviços MIND, escrita em NestJS. Não é uma a
 | `mind-helpers`  | `MindError`, `toError()`, `jsonError()` e `isNullOrUndefined()`                                                            |
 | `mind-graphql`  | `GraphqlAuthJwksService` e `GraphqlAuthGatewayService` (Apollo Federation 2) e os _input types_ de consulta                |
 | `mind-mongoose` | `getQuery()` / `getOptions()`, que traduzem os _inputs_ GraphQL em filtro e opções do Mongoose                             |
+| `mind-tracing`  | traces e métricas do OpenTelemetry sem código no serviço (`register`, `currentTraceId()`), ver [Observabilidade](#observabilidade-opentelemetry) |
 
 Tudo o que é público passa pelo _barrel_ `src/index.ts`: um arquivo novo só fica visível para os
 serviços quando é reexportado lá.
@@ -216,60 +217,83 @@ GraphQLModule.forRootAsync<ApolloFederationDriverConfig>({
 });
 ```
 
-### Tracing (OpenTelemetry)
+### Observabilidade (OpenTelemetry)
 
-O módulo `mind-tracing` liga o SDK do OpenTelemetry e exporta os traces por OTLP/HTTP. Para ativá-lo, o
-serviço importa o `register` **na primeira linha do `main.ts`**:
+O módulo `mind-tracing` liga o SDK do OpenTelemetry e envia traces e métricas por OTLP/HTTP a um coletor (Grafana Alloy ou OpenTelemetry Collector), sem nenhuma linha de instrumentação no serviço. O serviço só carrega o `register` antes da aplicação e define as variáveis abaixo.
+
+#### Ativação
+
+A forma recomendada é carregar o `register` no comando que inicia a aplicação, sem mudar o código:
+
+```bash
+node -r mind-api-helpers/dist/mind-tracing/register dist/main.js
+```
+
+No Dockerfile isso vai no `CMD` (por exemplo `CMD ["node", "-r", "mind-api-helpers/dist/mind-tracing/register", "dist/main.js"]`). Evite colocar o `-r` no `NODE_OPTIONS`: a variável vale para todo processo Node do contêiner (`yarn`, CLI do Nest, migrations, scripts), e cada um subiria um SDK e mandaria telemetria em nome do serviço.
+
+A alternativa é importar o `register` na primeira linha do `main.ts`:
 
 ```ts
 import 'mind-api-helpers/dist/mind-tracing/register';
 import { NestFactory } from '@nestjs/core';
-// ... demais imports
 ```
 
-Atenção à ordem: nada que carregue `mongoose` ou `@nestjs/*` pode ser importado antes do `register`. As
-instrumentações só conseguem alterar um módulo que ainda não foi carregado; importado antes, ele fica
-sem spans. Por isso o `register` **não** é exportado pelo `src/index.ts` (o barrel carrega o `mongoose` ao
-ser importado).
+Nos dois casos, nada que carregue `mongoose` ou `@nestjs/*` pode ser carregado antes do `register`, porque as instrumentações só conseguem alterar um módulo que ainda não foi carregado. Por isso o `register` **não** é exportado pelo `src/index.ts` (o barrel carrega o `mongoose` ao ser importado).
 
-O tracing fica desligado quando `OTEL_EXPORTER_OTLP_ENDPOINT` não está definida ou quando
-`OTEL_SDK_DISABLED=true`; nesse caso nada do SDK é carregado. Se o SDK falhar ao iniciar, uma linha vai
-para o `stderr` e a aplicação segue sem tracing. Falhas de exportação (endpoint errado, coletor fora do ar)
-também são registradas no `stderr`, mas só a primeira, em uma linha; defina `OTEL_LOG_LEVEL` para controlar
-você mesmo os diagnósticos do OpenTelemetry (nesse caso a biblioteca não instala o logger dela).
+#### O que é instrumentado
 
-**As variáveis `OTEL_*` (e `MIND_TRACING_IGNORE_PATHS`) precisam estar no ambiente real do processo**
-(`env`/Secret do Kubernetes, `export`, `docker -e`). O `register` roda na primeira linha do `main.ts`, antes de
-o `ConfigModule`/`dotenv` ler o arquivo `.env`; valores que só existem no `.env` chegam tarde demais e o
-tracing fica desligado, sem aviso.
+| Origem | Instrumentação | O que aparece |
+| --- | --- | --- |
+| HTTP de entrada e de saída (inclui `axios`) | `http` | spans e `http.server.request.duration` / `http.client.request.duration` |
+| `fetch` nativo (inclui SDKs que usam `fetch`) | `undici` | spans e `http.client.request.duration` |
+| Express e NestJS | `express`, `nestjs-core` | rota e handler nos spans |
+| MongoDB (inclui `mongoose`) | `mongodb` | um span por comando |
+| Redis/Valkey (`ioredis`) | `ioredis` | um span por comando |
+| RabbitMQ (`amqplib`, inclui `@golevelup/nestjs-rabbitmq`) | `amqplib` | spans de publicação e de consumo |
+| GraphQL | `graphql` | spans de parse, validação e execução, com `graphql.operation.name`; sem spans por resolver |
+| Runtime do Node | `runtime-node` | event loop, heap e GC (`nodejs.eventloop.*`, `v8js.*`) |
+| AI SDK (`ai` >= 7) | integração própria | spans e métricas de IA, ver abaixo |
 
-| Variável                      | Efeito                                                                                                                                 |
-| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | endereço do coletor (ex.: `http://tempo.monitoring.svc.cluster.local:4318`); sem ela, desligado                                        |
-| `OTEL_SDK_DISABLED`           | `true` desliga o tracing mesmo com o endpoint definido                                                                                 |
-| `OTEL_SERVICE_NAME`           | nome do serviço nos traces (ex.: `mind-api-healthcheck`)                                                                               |
-| `OTEL_METRICS_EXPORTER`       | assume `none` se ausente (o SDK, por padrão, tentaria exportar para `localhost:4318`)                                                  |
-| `OTEL_LOGS_EXPORTER`          | assume `none` se ausente, pelo mesmo motivo                                                                                            |
-| `OTEL_TRACES_SAMPLER`         | amostragem; recomendado `parentbased_traceidratio`                                                                                     |
-| `OTEL_TRACES_SAMPLER_ARG`     | razão de amostragem; `1.0` é o valor da prova de conceito no healthcheck; a amostragem de produção é decisão posterior (a ideia é 10%) |
-| `MIND_TRACING_IGNORE_PATHS`   | lista separada por vírgula de caminhos sem trace; **soma-se** ao padrão `/health/live`                                                 |
+As rotas de saúde não geram trace: qualquer caminho terminado em `/health` ou `/health/live`, com qualquer prefixo (`/concierge/health`, `/<projeto>/<branch>/health`). `MIND_TRACING_IGNORE_PATHS` acrescenta caminhos exatos.
 
-No `SIGTERM` o módulo descarrega os spans pendentes (espera no máximo 5 s) e reenvia o sinal, para o
-processo encerrar normalmente. Se o serviço registrar o próprio handler de `SIGTERM`, o reenvio não
-acontece e o encerramento fica a cargo desse handler.
+#### AI SDK
 
-Para manter uma única cópia de `@opentelemetry/api` (1.9.0), esta biblioteca declara
-`"resolutions": { "@opentelemetry/api": "1.9.0" }`, mas o `resolutions` do Yarn só vale no projeto raiz.
-Cada serviço que ativar o tracing deve incluir o mesmo bloco no próprio `package.json` e conferir com
-`yarn why @opentelemetry/api`. Sem a resolução, o consumidor pode acabar com duas cópias (a 1.9.0 e uma 1.x mais
-nova), o que pode fazer o SDK e as instrumentações não enxergarem um ao outro.
+Com o SDK ligado, o módulo registra uma integração de telemetria no registro global do AI SDK (`globalThis.AI_SDK_TELEMETRY_INTEGRATIONS`), que o `ai` 7 usa em toda chamada de `generateText`, `streamText`, `generateObject` e `embed`. Cada chamada vira um span `invoke_agent <modelo>`, com um filho `chat <modelo>` por ida ao modelo (tokens, motivo de término, modelo da resposta) e um filho `execute_tool <ferramenta>` por execução de ferramenta. A requisição ao provedor roda dentro do span `chat` e a ferramenta dentro do span `execute_tool`, então as chamadas HTTP, de banco e de fila que elas fazem aparecem aninhadas. As métricas seguem as convenções GenAI: `gen_ai.client.token.usage` (por `gen_ai.token.type`) e `gen_ai.client.operation.duration`.
+
+Prompt, resposta, argumentos e resultado de ferramenta **nunca** são gravados, porque carregam dado de cliente. Um serviço que passe `telemetry.integrations` ou `telemetry.isEnabled: false` na chamada substitui a integração global e não gera esses spans. A biblioteca não depende do pacote `ai`: um serviço sem ele só fica com uma lista global não usada.
+
+#### Log
+
+Quando a chamada de log acontece dentro de um span, o `MindLoggerService` acrescenta ` | trace_id=<id>` ao fim da linha. Os campos anteriores não mudam de posição, e sem tracing a linha fica igual.
+
+#### Variáveis
+
+O SDK fica desligado quando `OTEL_EXPORTER_OTLP_ENDPOINT` não está definida ou quando `OTEL_SDK_DISABLED=true`; nesse caso nada do SDK é carregado. Se o SDK falhar ao iniciar, uma linha vai para o `stderr` e a aplicação segue sem telemetria. Falhas de exportação (endpoint errado, coletor fora do ar) também vão para o `stderr`, mas só a primeira; defina `OTEL_LOG_LEVEL` para controlar você mesmo os diagnósticos do OpenTelemetry (nesse caso a biblioteca não instala o logger dela).
+
+O `register` roda antes de o `ConfigModule`/`dotenv` ler o `.env`. Por isso ele mesmo lê o `.env` do diretório de trabalho, quando existe, e copia só as variáveis `OTEL_*` e `MIND_TRACING_*` que ainda não estão no ambiente; o resto do arquivo continua sendo lido pelo serviço como antes. Isso exige Node 20.12 ou mais novo (`util.parseEnv`); em versão anterior, só vale o ambiente real do processo.
+
+| Variável | Efeito |
+| --- | --- |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | endereço do coletor (ex.: `http://alloy.<namespace>.svc.cluster.local:4318`); sem ela, tudo desligado |
+| `OTEL_SDK_DISABLED` | `true` desliga mesmo com o endpoint definido |
+| `OTEL_SERVICE_NAME` | nome do serviço nos traces e nas métricas (ex.: `mind-api-concierge`) |
+| `OTEL_RESOURCE_ATTRIBUTES` | atributos do serviço, como `deployment.environment=production` |
+| `OTEL_METRICS_EXPORTER` | assume `otlp` se ausente: as métricas vão ao mesmo endpoint dos traces, que precisa aceitar `/v1/metrics` (um coletor, não o Tempo direto); `none` desliga |
+| `OTEL_LOGS_EXPORTER` | assume `none` se ausente: o log segue pelo stdout e pelo arquivo |
+| `OTEL_TRACES_SAMPLER` / `OTEL_TRACES_SAMPLER_ARG` | amostragem no serviço; quando o coletor deriva métricas dos spans, mantenha 100% no serviço e amostre no coletor |
+| `MIND_TRACING_IGNORE_PATHS` | lista separada por vírgula de caminhos exatos sem trace; **soma-se** às rotas de saúde |
+
+No `SIGTERM` o módulo descarrega os spans e as métricas pendentes (espera no máximo 5 s) e reenvia o sinal, para o processo encerrar normalmente. Se o serviço registrar o próprio handler de `SIGTERM`, o reenvio não acontece e o encerramento fica a cargo desse handler.
+
+Para manter uma única cópia de `@opentelemetry/api` (1.9.0), esta biblioteca declara `"resolutions": { "@opentelemetry/api": "1.9.0" }`, mas o `resolutions` do Yarn só vale no projeto raiz. Cada serviço que ativar o módulo deve incluir o mesmo bloco no próprio `package.json` e conferir com `yarn why @opentelemetry/api`. Sem a resolução, o consumidor pode acabar com duas cópias (a 1.9.0 e uma 1.x mais nova), e o SDK e as instrumentações podem não enxergar um ao outro.
+
+As versões do OpenTelemetry são fixas na linha que ainda instala em Node 20, porque há serviços nessa versão. O AI SDK 7 exige Node 22 por conta própria, então a integração de IA só é exercitada em serviços que já estão nessa versão.
 
 `currentTraceId()` devolve o `traceId` do span ativo, quando existe.
 
 ## Variáveis de ambiente
 
-A biblioteca lê as três variáveis abaixo — quem as define é o serviço que a consome (ela não carrega `.env`).
-As variáveis do tracing (`OTEL_*` e `MIND_TRACING_IGNORE_PATHS`) estão na seção [Tracing](#tracing-opentelemetry):
+A biblioteca lê as três variáveis abaixo, e quem as define é o serviço que a consome (ela não carrega o `.env` para elas). As variáveis de observabilidade (`OTEL_*` e `MIND_TRACING_IGNORE_PATHS`) estão na seção [Observabilidade](#observabilidade-opentelemetry):
 
 | Variável   | Efeito                                                                    |
 | ---------- | ------------------------------------------------------------------------- |
