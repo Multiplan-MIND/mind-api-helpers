@@ -12,6 +12,7 @@ Biblioteca interna de apoio dos serviços MIND, escrita em NestJS. Não é uma a
 | `mind-logger`   | logger baseado em winston, com escopo por módulo (`MindLoggerModule`, `MindLoggerService`, `@MindLogger()`, `logPrefix()`) |
 | `mind-helpers`  | `MindError`, `toError()`, `jsonError()` e `isNullOrUndefined()`                                                            |
 | `mind-graphql`  | `GraphqlAuthJwksService` e `GraphqlAuthGatewayService` (Apollo Federation 2) e os _input types_ de consulta                |
+| `mind-session`  | revogação de sessões (`isSessionRevoked`, `markSessionRevoked`, `markSessionsRevoked`) e `extractRequestInfo()`            |
 | `mind-mongoose` | `getQuery()` / `getOptions()`, que traduzem os _inputs_ GraphQL em filtro e opções do Mongoose                             |
 
 Tudo o que é público passa pelo _barrel_ `src/index.ts`: um arquivo novo só fica visível para os
@@ -57,6 +58,7 @@ biblioteca direto do git — sem esse ciclo, o consumidor receberia o pacote sem
 | ------------------- | ----------------------------------------------------------------- |
 | `yarn build`        | `tsc` gerando `dist/` (o `prebuild` limpa a pasta com `rimraf`)   |
 | `yarn test`         | jest, configuração em `jest.config.json` (`testRegex: .spec.ts$`) |
+| `yarn test:cov`     | jest com cobertura; falha se a cobertura de linhas ficar < 90%    |
 | `yarn lint`         | eslint; o prettier roda como regra do eslint                      |
 | `yarn lint-autofix` | o mesmo, com `--fix`                                              |
 
@@ -69,8 +71,11 @@ yarn test                                   # tudo
 yarn test src/mind-helpers                  # um diretório
 yarn test -t 'should preserve subclasses'   # um teste pelo nome
 yarn test --watch
-yarn test --coverage
+yarn test:cov                               # com cobertura
 ```
+
+O `coverageThreshold` de 90% (linhas, em `jest.config.json`) só vale para `yarn test:cov`: o `yarn test`
+simples não é afetado, mas o `test:cov` falha se a cobertura cair abaixo disso.
 
 O VS Code tem a configuração de debug **"API Helpers - Jest"** em `.vscode/launch.json`.
 
@@ -148,15 +153,20 @@ Dois detalhes que costumam gerar dúvida:
 
 `GraphqlAuthJwksService` e `GraphqlAuthGatewayService` são duas implementações intercambiáveis de
 `GqlOptionsFactory` para Apollo Federation 2. As duas montam o mesmo contexto de requisição
-(`mindUserId`, `mindUserRoles`, `mindSessionExpiresIn`):
+(`mindUserId`, `mindUserRoles`, `mindSessionExpiresIn`, `mindSessionId` e `mindRequestInfo`, ver
+[Sessões e revogação](#sessões-e-revogação)):
 
 - **JWKS** — valida o token `Bearer` contra o JWKS baixado de `JWKS_URL`, com a chave pública em cache
   no redis. Use na borda, onde o token chega do cliente.
-- **Gateway** — confia nos headers `mind-user-id`, `mind-user-roles` e `mind-session-expires-in` já
-  injetados por quem está na frente. Use atrás do router.
+- **Gateway** — confia nos headers `mind-user-id`, `mind-user-roles`, `mind-session-expires-in` e
+  `mind-session-id` já injetados por quem está na frente (o router), além de `mind-request-ip`, o IP do
+  cliente. Use atrás do router.
 
-Ambas exigem que o serviço forneça um provider `REDIS_CLIENT` (um client `ioredis`) e, em caso de
-falha, retornam `undefined` em vez de lançar — os resolvers ficam sem contexto.
+Ambas exigem que o serviço forneça um provider `REDIS_CLIENT` (um client `ioredis`). Em caso de falha
+(token inválido, sessão revogada, redis fora, headers de identidade malformados) o contexto **lança**
+um `GraphQLError` `UNAUTHENTICATED` com status HTTP 401. Não pode ser `undefined`: o driver do Apollo
+troca o contexto vazio por `{ req }` e a requisição seguiria como anônima, com status 200. Sem token, o
+contexto é anônimo (campos `null`), como antes. Token com a sessão apenas expirada também segue anônimo.
 
 ```ts
 GraphQLModule.forRootAsync<ApolloFederationDriverConfig>({
@@ -166,15 +176,74 @@ GraphQLModule.forRootAsync<ApolloFederationDriverConfig>({
 });
 ```
 
+## Sessões e revogação
+
+O contexto dos dois serviços de GraphQL carrega o id da sessão (`mindSessionId`), mas só o
+`GraphqlAuthJwksService` **impõe** a revogação. O `GraphqlAuthGatewayService` não consulta o redis, não
+lê `SESSION_REQUIRE_SID` e não valida `sid`: ele apenas copia o header `mind-session-id` para
+`mindSessionId` (ou `null`, se ausente ou vazio) e confia que o router à frente já rejeitou sessões
+revogadas. O router precisa, portanto, checar a revogação e repassar `mind-session-id`.
+
+- **Claim `sid`** — o token JWT carrega o id da sessão no claim `sid`. O `GraphqlAuthJwksService` o expõe
+  como `mindSessionId` (`null` em token legado, sem o claim). Se o claim existir, mas não for uma string
+  não vazia (`''`, número, `null`), o token é rejeitado: nunca é tratado como legado.
+- **Chave de revogação** — uma sessão revogada é marcada no redis em `mind:session:revoked:<sid>`, com
+  valor `1` e TTL igual ao tempo que falta para a sessão expirar **mais 60 s de margem** para diferença
+  de relógio entre quem revoga e quem valida. A chave é global: leitura e escrita ignoram o
+  `REDIS_PREFIX` do serviço, então todos os serviços enxergam a mesma revogação. Os helpers ficam em
+  `src/mind-session/session.helper.ts`.
+  - `markSessionRevoked(redis, sid, ttlSeconds)` devolve `false` se a sessão já expirou (`ttlSeconds <= 0`)
+    e lança `RangeError` se o TTL não for finito, ou `TypeError` se o `sid` for vazio.
+  - `markSessionsRevoked(redis, items)` revoga várias de uma vez (deduplica por `sid`, ficando com o maior
+    TTL) e devolve `{ revoked: string[]; failed: { sid, error }[] }` em vez de lançar no primeiro erro.
+    O pipeline não é atômico, mas o `SET` é idempotente: repetir a chamada inteira é seguro.
+- **`SESSION_REQUIRE_SID`** (só `GraphqlAuthJwksService`) — controla tokens legados, sem `sid`. Por
+  padrão (vazio ou `false`, a fase de transição) o token é aceito, com log em nível `debug`, já que essa
+  sessão não pode ser revogada. Com `true` ou `1` ele é rejeitado. Aceita só `true`, `false`, `1` e `0`
+  (sem diferenciar maiúsculas, ignorando espaços nas pontas); **qualquer outro valor derruba o boot** do
+  serviço, para que um erro de digitação não deixe a exigência desligada em silêncio. É lida uma vez, na
+  construção do serviço.
+- **Fail-closed** (só `GraphqlAuthJwksService`) — para um token com `sid`, se a sessão estiver revogada
+  **ou** o redis estiver indisponível, a requisição é rejeitada com 401 `UNAUTHENTICATED`. Não há
+  "na dúvida, aceita". O log da sessão revogada inclui IP e user agent.
+- **`mindRequestInfo`** — os dois serviços colocam `mindRequestInfo` no contexto (`ip`, `userAgent` e os
+  headers `acceptLanguage`, `acceptEncoding`, `secChUa`, `secChUaPlatform`, `secChUaMobile` e
+  `xForwardedFor`).
+  - **`ip`** — vem de `req.ip` (com `net.isIP()`; `null` se não for um IP), **nunca** do primeiro item de
+    `X-Forwarded-For`, que é o valor enviado pelo próprio cliente. O serviço precisa configurar o
+    `trust proxy` do Express com o número de proxies à frente (por exemplo `app.set('trust proxy', 1)`).
+    O header bruto continua em `headers.xForwardedFor`, só para auditoria.
+  - **Gateway** — atrás do router, `req.ip` seria o do próprio router. O `GraphqlAuthGatewayService`
+    lê o IP do header `mind-request-ip`, que o router preenche com o IP do cliente (já resolvido pelo
+    `trust proxy` dele), e o router copia `user-agent`, `accept-*` e `sec-ch-ua*` do cliente. Sem esses
+    repasses `ip` e `userAgent` descrevem o router, e os dados não servem para auditoria.
+
+### Premissas do redis
+
+A checagem de revogação usa `EVAL` com a chave em `ARGV` (`numkeys = 0`), porque o `keyPrefix` do ioredis
+só é aplicado a argumentos de chave e a chave de revogação é global. Isso assume **redis standalone, sem
+ACL por prefixo** (a topologia atual dos ambientes). Em Redis Cluster o script falharia
+("non local key in a cluster node") quando a chave caísse em outro slot, e um usuário ACL restrito a
+`~<prefixo>:*` receberia `NOPERM`. Se a topologia mudar, trocar por um client sem prefixo
+(`redis.duplicate({ keyPrefix: '' })`) com `EXISTS` e `SET` nativos e liberar `~mind:session:revoked:*`.
+
+```ts
+import { isSessionRevoked, markSessionRevoked } from 'mind-api-helpers';
+
+await markSessionRevoked(redis, sid, ttlSeconds); // grava mind:session:revoked:<sid>
+await isSessionRevoked(redis, sid); // true enquanto a chave existir
+```
+
 ## Variáveis de ambiente
 
-A biblioteca lê apenas três — quem as define é o serviço que a consome (ela não carrega `.env`):
+A biblioteca lê apenas quatro — quem as define é o serviço que a consome (ela não carrega `.env`):
 
-| Variável   | Efeito                                                                    |
-| ---------- | ------------------------------------------------------------------------- |
-| `DEBUG`    | qualquer valor definido sobe o nível do logger de `info` para `debug`     |
-| `NODE_ENV` | `production` desliga a cor e o arquivo de log; outro valor mantém os dois |
-| `JWKS_URL` | endereço do documento JWKS usado pelo `GraphqlAuthJwksService`            |
+| Variável              | Efeito                                                                                                                             |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `DEBUG`               | qualquer valor definido sobe o nível do logger de `info` para `debug`                                                              |
+| `NODE_ENV`            | `production` desliga a cor e o arquivo de log; outro valor mantém os dois                                                          |
+| `JWKS_URL`            | endereço do documento JWKS usado pelo `GraphqlAuthJwksService`                                                                     |
+| `SESSION_REQUIRE_SID` | `true`/`1` rejeita tokens sem `sid`; `false`/`0`/vazio os aceita (sem diferenciar maiúsculas, com trim); outro valor falha no boot |
 
 O acesso ao redis não vem de variável: chega pelo provider `REDIS_CLIENT`, configurado no serviço.
 A chave pública fica em cache sob `JWKS_PUBLIC_KEY` por um dia.
