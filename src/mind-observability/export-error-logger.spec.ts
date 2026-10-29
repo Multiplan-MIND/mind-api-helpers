@@ -1,6 +1,14 @@
+/**
+ * Testes executados:
+ * - escreve o primeiro erro e no máximo uma linha a cada 5 minutos, contando os suprimidos
+ * - ignora os níveis diferentes de erro
+ * - não instala o logger quando OTEL_LOG_LEVEL está definida
+ */
+
 import { diag } from '@opentelemetry/api';
 import { registerExportErrorLogger } from './export-error-logger';
 
+/** Testes */
 describe('registerExportErrorLogger', () => {
   let write: jest.SpyInstance;
   let clock: number;
@@ -16,7 +24,7 @@ describe('registerExportErrorLogger', () => {
     write.mockRestore();
   });
 
-  it('writes the first error and at most one line every 5 minutes, counting the suppressed ones', () => {
+  it('escreve o primeiro erro e no máximo uma linha a cada 5 minutos, contando os suprimidos', () => {
     registerExportErrorLogger({}, now);
     diag.error('first');
     clock = 60_000;
@@ -31,14 +39,14 @@ describe('registerExportErrorLogger', () => {
     expect(write.mock.calls[1][0]).toContain('(2 more errors since the previous line): fourth');
   });
 
-  it('ignores levels other than error', () => {
+  it('ignora os níveis diferentes de erro', () => {
     registerExportErrorLogger({}, now);
     diag.warn('careful');
     diag.info('fyi');
     expect(write).not.toHaveBeenCalled();
   });
 
-  it('does not install the logger when OTEL_LOG_LEVEL is set', () => {
+  it('não instala o logger quando OTEL_LOG_LEVEL está definida', () => {
     registerExportErrorLogger({ OTEL_LOG_LEVEL: 'info' }, now);
     diag.error('boom');
     expect(write).not.toHaveBeenCalled();

@@ -14,12 +14,11 @@ it is re-exported there.
 
 ## Commands
 
-Node is pinned by `.nvmrc` (v24.22.1), `engines.node` is `>=24` (no upper bound) and the package manager is
-**yarn** (v1 / classic). Tests need Node >= 24.9: the NestJS 12 packages are ESM-only and Jest 30 can only
-`require()` them from that version on.
+Node is pinned by `.nvmrc` (v24.22.1), `engines.node` is `^24.22.0` and the package manager is **yarn** (v1 /
+classic).
 
 ```bash
-nvm use                                   # required: Jest needs Node >= 24.9 (require(esm))
+nvm use                                   # required: Jest loads the ESM-only NestJS 12 through require(esm)
 yarn install                              # see the install cycle warning below
 yarn build                                # tsc -> dist/ (prebuild wipes dist via rimraf)
 yarn lint                                 # eslint (prettier runs as an eslint rule)
@@ -66,9 +65,10 @@ Consequences to keep in mind when touching `package.json`:
   service on another bson major fails with `BSONVersionError`. A new Mongoose major needs a new major of this library.
 - `dependencies` holds `axios`, `jsonwebtoken`, `jwk-to-pem` and the OpenTelemetry packages (exact pins, except the
   `@opentelemetry/api` range). `axios` is imported by `error.helper.ts` and `graphql-auth-jwks.service.ts`.
-- `engines.node` is `>=24`: the library and its consuming services move to Node 24 together. NestJS 12 ships ESM
-  only and CommonJS consumers load it through Node's `require(esm)`. Running this package's tests needs Node >= 24.9
-  (Jest 30).
+- **Two release lines live in parallel.** 1.x serves services on Node older than 24 (NestJS 10, Mongoose 7/8, no
+  observability); 2.x serves Node 24 from 24.22 on (`engines.node` `^24.22.0`, NestJS 12, Mongoose 9,
+  `mind-observability`). A fix that applies to both ships in a version of each line, and a new Node major needs a
+  new major of this library. NestJS 12 ships ESM only and CommonJS consumers load it through Node's `require(esm)`.
 - Releasing means bumping `version` in `package.json`, tagging the commit, and updating the `#tag` in
   each consuming repo. Branches are used as refs too (`#feature/to-error-helper`) while a change is
   being validated against a service.
@@ -98,8 +98,7 @@ builds the winston logger, and every method uses `?.`, so logging before `setMod
 no-op. `MindLoggerFactory` writes to `logs/<module>.log` **relative to `process.cwd()`** and switches
 the level to `debug` when `process.env.DEBUG` is set. Colour and the `File` transport are controlled
 **only** by `process.env.NODE_ENV`: exactly `'production'` → no `colorize` and no `File` transport
-(console only); any other value, or unset → `colorize` and `logs/<module>.log`. `isTTY` and
-`KUBERNETES_SERVICE_HOST` are no longer consulted. `logPrefix(method, infos)` builds the
+(console only); any other value, or unset → `colorize` and `logs/<module>.log`. `logPrefix(method, infos)` builds the
 `pid|method#info1;info2` string that every call site passes as `prefix`.
 
 ### `mind-helpers/error.helper.ts`
@@ -152,28 +151,35 @@ the GraphQL defaults (`limit: 10`, sort by `updatedAt` desc) when they are.
 The module is split by concern. The root holds what serves both signals: `register.ts` (the entry, also reachable as `mind-api-helpers/observability` through the root `observability.js` shim, named after the module because the library has other modules), `start-observability.ts` (the switch), `observability-sdk.ts` (builds and starts `NodeSDK`), `esm-loader-hook.ts` (the `import` hook), `instrumentations.ts` (which instrumentations are on), `observability-resource.ts`, `observability-shutdown.ts`, `export-error-logger.ts`, `api-copies.ts`, `ai-sdk-calls.ts` (the AI SDK call lifecycle) and `ai-sdk-telemetry.ts` (AI SDK event shapes, provider/operation mapping, the GenAI schema URL and the global registration). `tracing/` holds what produces or reads spans: `tracing-instrumentations.ts` (options per instrumentation), `personal-data.ts`, `ignore-paths.ts`, `ai-sdk-tracing.ts` and `active-span.ts`. `metrics/` holds what produces metrics only: `metrics-instrumentations.ts` (host-metrics options) and `ai-sdk-metrics.ts`. Keep new files on that split. `src/mind-observability/README.md` (pt-BR, linked from the main README) documents the behaviour, the activation command, the variables and the defaults; this section only covers what matters when changing the code.
 
 - **Switch and lazy load.** `isObservabilityEnabled` is true when `OTEL_EXPORTER_OTLP_ENDPOINT` is set and `OTEL_SDK_DISABLED` is not `true` (any case). Only after that check does `startObservability` load `observability-sdk.ts`, through `module.require` with `import type` for its types: a static import would load the SDK in every service, and `import()` resolves after the application has loaded the modules to patch. `dist/mind-observability/register.js` loaded without the variables must not put `sdk-node` in `require.cache`; `register.e2e.spec.ts` asserts it. Every other file reached from `src/index.ts` (`active-span.ts`, `observability-shutdown.ts`) must stay free of SDK imports.
-- **`register` is not exported from `src/index.ts` on purpose.** The barrel imports `mongoose` at load time, and the instrumentations can only patch a module that has not been loaded yet. The root `observability.js` only requires `./dist/mind-observability/register`, so services start with `node -r mind-api-helpers/observability` without an `exports` map (an `exports` map would break the extensionless deep imports `mind-api-concierge` uses, such as `mind-api-helpers/dist/mind-logger/mind-logger.factory`). Use `-r`: ESM resolution does not add the extension, so `--import mind-api-helpers/observability` fails.
+- **`register` is not exported from `src/index.ts` on purpose.** The barrel imports `mongoose` at load time, and the instrumentations can only patch a module that has not been loaded yet. The root `observability.js` only requires `./dist/mind-observability/register`, so services start with `node -r mind-api-helpers/observability` without an `exports` map (an `exports` map would break the extensionless deep imports services use, such as `mind-api-helpers/dist/mind-logger/mind-logger.factory`). Use `-r`: ESM resolution does not add the extension, so `--import mind-api-helpers/observability` fails.
 - **One entry for CommonJS and ESM.** `esm-loader-hook.ts` registers `import-in-the-middle/register-hooks.mjs` (synchronous `module.registerHooks`, replacing the deprecated `module.register`), required from where `@opentelemetry/instrumentation` resolves it so the hook and the instrumentations' `Hook()` share one copy. Being synchronous, it works when loaded with `-r`, so there is no separate ESM entry. Before Node 24.11.1 (`supportsSyncHooks()` false) it writes one stderr line and skips the hook: only `require`d modules are patched. Specs mock it; the real hook would alter Jest's own module loading.
 - **No fixed exporter and no writes to `process.env`.** Exporters, protocol, sampler and propagators come from the standard variables, read by `NodeSDK`. The only override is `logRecordProcessors: []` when `OTEL_LOGS_EXPORTER` is unset, because `NodeSDK` would default logs to OTLP.
 - **Instrumentations** come from `getNodeAutoInstrumentations`. `enabled: false` in its config beats `OTEL_NODE_ENABLED_INSTRUMENTATIONS`, so `instrumentations.ts` applies its defaults (dns, net, mongoose and winston off, host-metrics on) only while that variable is unset, and leaves host-metrics alone when `OTEL_NODE_DISABLED_INSTRUMENTATIONS` names it. The three config maps it spreads must keep distinct keys.
 - **Personal data** is masked in-process by `personal-data.ts` (http/undici `requestHook`, ioredis and node-redis `dbStatementSerializer`). The patterns mirror `otelcol.processor.transform.redact` in `mind-api-observability`; change both together.
-- **Resource:** `service.name`/`service.version` default to the `package.json` in `process.cwd()`; detectors are container, host, os, process without command-line attributes, serviceinstance, and `env` last so explicit configuration wins. `OTEL_NODE_RESOURCE_DETECTORS` switches to the official list.
-- **AI SDK.** The AI SDK 7 telemetry integration interface is implemented twice, without depending on `ai`: `tracing/ai-sdk-tracing.ts` (root `invoke_agent` with tools or `chat` without, `chat` per model call, `execute_tool` per tool; the provider request and the tool run inside their spans) and `metrics/ai-sdk-metrics.ts` (`gen_ai.client.token.usage`, `gen_ai.client.operation.duration` from `performance.now()`). Both keep their per-call state in an `AiSdkCalls`, which expires calls after 10 minutes or beyond 1000 open (`error.type=timeout`). Tracer and meter declare `GEN_AI_SCHEMA_URL`; bump it together with any GenAI attribute rename. **Neither records prompts, replies, tool arguments or tool results**, and the tracing spec asserts it. When bumping across `ai` majors, check the `Telemetry` interface in `ai`'s `index.d.ts`; the AI SDK swallows integration exceptions, so a shape mismatch loses telemetry, not requests.
-- **Log correlation.** `MindLoggerService` reads `currentSpanIds()` at the call site and `mtsLoggerFormat` appends ` | trace_id=<id> span_id=<id>` only when present, so existing field positions never move. `warn`/`error` call `markActiveSpanWithLog`, which sets `mind.log.warn`/`mind.log.error`; the collector's tail sampling keeps those traces. `mind-logger` depends on `tracing/active-span.ts`, which depends only on `@opentelemetry/api`.
-- **Errors.** An SDK start failure writes one stderr line and the app keeps running. Without `OTEL_LOG_LEVEL`, `export-error-logger.ts` writes at most one export error every 5 minutes with the suppressed count. `api-copies.ts` warns when a newer `@opentelemetry/api` minor sits at the service root or under `ai`.
-- **Shutdown.** One listener per signal (SIGTERM, SIGINT) plus `beforeExit`; the listener stays registered while the flush runs (5 s cap) so a signal re-raised by NestJS's shutdown hooks waits for it, then removes itself and re-raises when nobody else listens. `shutdownObservability()` returns the same flush promise.
-- **Versions:** `@opentelemetry/api` is a range (`^1.10.0`) on purpose; everything else is pinned on the SDK 0.300 line (`sdk-node` 0.300.0, `auto-instrumentations-node` 0.82.0, `instrumentation` 0.300.0, `instrumentation-express` 0.72.0, `resources` 3.0.0, `resource-detector-container` 0.9.0), which requires Node >= 22.15. Bump them together and keep `auto-instrumentations-node` on the same `sdk-node` line.
+- **Resource:** the `env` detector goes last so `OTEL_SERVICE_NAME` and `OTEL_RESOURCE_ATTRIBUTES` win over what is detected; the process detector drops command-line attributes, which could carry a token.
+- **AI SDK.** The AI SDK 7 telemetry integration interface is implemented twice, without depending on `ai`: `tracing/ai-sdk-tracing.ts` and `metrics/ai-sdk-metrics.ts` (durations from `performance.now()`). Both keep their per-call state in an `AiSdkCalls`, which expires calls that never finish. Tracer and meter declare `GEN_AI_SCHEMA_URL`; bump it together with any GenAI attribute rename. **Neither records prompts, replies, tool arguments or tool results**, and the tracing spec asserts it. When bumping across `ai` majors, check the `Telemetry` interface in `ai`'s `index.d.ts`; the AI SDK swallows integration exceptions, so a shape mismatch loses telemetry, not requests.
+- **Log correlation.** `MindLoggerService` reads `currentSpanIds()` at the call site and `mtsLoggerFormat` appends ` | trace_id=<id> span_id=<id>` only when present, so existing field positions never move. `warn`/`error` call `markActiveSpanWithLog`, which sets `mind.log.warn`/`mind.log.error` so a tail-sampling collector can keep those traces. `mind-logger` depends on `tracing/active-span.ts`, which depends only on `@opentelemetry/api`.
+- **Shutdown.** The signal listener stays registered while the flush runs, so a signal re-raised by NestJS's shutdown hooks waits for it; only then does it remove itself and re-raise when nobody else listens.
+- **Versions:** `@opentelemetry/api` is a range (`^1.10.0`) on purpose; everything else is pinned on the SDK 0.300 line (`sdk-node` 0.300.0, `auto-instrumentations-node` 0.82.0, `instrumentation` 0.300.0, `instrumentation-express` 0.72.0, `resources` 3.0.0, `resource-detector-container` 0.9.0). Bump them together and keep `auto-instrumentations-node` on the same `sdk-node` line.
 - **Tests:** the unit specs mock `NodeSDK` and `getNodeAutoInstrumentations`; the tracing specs use the real `TracerProvider` with an `InMemorySpanExporter` (`@opentelemetry/sdk-trace` 3.0.0) and the `AsyncLocalStorageContextManager`. `register.e2e.spec.ts` compiles `src/` into `node_modules/.cache/mind-observability-e2e`, starts the services in `__fixtures__/service` (`server.cjs` and `server.mjs`) with `-r register` against an in-memory OTLP/JSON receiver, and checks spans, masking, metrics and the resource, that `ioredis` loaded with `import` is patched (`esm-patched=true`; `node:http` would be patched even without the hook), plus that nothing loads when `OTEL_SDK_DISABLED=true`.
 
 ## Conventions and gotchas
 
-- **Code is English** (identifiers, file names, commit messages, branch names, log/error strings and test
-  descriptions), per the "Idioma" section of the README; the READMEs (the main one and `src/mind-observability/README.md`) are the only documents written in pt-BR.
-- **Comments use one language per module.** `mind-logger`, `mind-helpers`, `mind-graphql` and `mind-mongoose`
-  comment in English. `mind-observability` comments in Brazilian Portuguese, with accents, in the
-  `mind-api-concierge` format: every explanatory comment in `.ts`, `.js`, `.cjs` and `.mjs` is a `/** */` block,
-  never `//`; it states only the non-obvious why, briefly; no full JSDoc with `@param`/`@returns`. When touching a
-  file, write in its module's language and translate any comment found in the other one.
+- **Code is English** (identifiers, file names, commit messages, branch names, log/error strings), per the "Idioma"
+  section of the README; the READMEs (the main one and `src/mind-observability/README.md`) are the only documents
+  written in pt-BR.
+- **Comments and test descriptions use one language per module.** `mind-logger`, `mind-helpers`, `mind-graphql` and
+  `mind-mongoose` use English. `mind-observability` uses Brazilian Portuguese, with accents: every explanatory comment
+  in `.ts`, `.js`, `.cjs` and `.mjs` is a `/** */` block, never `//`; it states only the non-obvious why, briefly; no
+  full JSDoc with `@param`/`@returns`. Its spec files open with a `Testes executados:` block listing every `it`
+  (nested like the `describe`s), then the imports, then `/** Configuração */`, `/** Fixtures */`,
+  `/** Factories/helpers */` and `/** Testes */` sections as needed, with `describe`/`it` descriptions in Portuguese;
+  the list is updated whenever an `it` changes. When touching a file, write in its module's language and translate
+  what is in the other one.
+- **Documentation and comments describe the current state, timelessly.** No reference to the plan, review or request
+  behind a change, and no transition narrative ("no longer", "used to", "now does"): readers of the repository have
+  none of that context. A rejected alternative is stated as a design property ("X would break Y because"). The
+  history of a change belongs in the pull request description.
 - Prettier config is duplicated in `.prettierrc` and inline in `.eslintrc.js` — edit both.
   Single quotes, 120 columns, trailing commas, 2 spaces.
 - `build` runs `tsc -p tsconfig.build.json`, which extends `tsconfig.json` and excludes `**/*spec.ts` and

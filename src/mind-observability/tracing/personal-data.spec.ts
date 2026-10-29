@@ -1,11 +1,30 @@
+/**
+ * Testes executados:
+ * - maskPersonalData
+ *   - mascara telefones com e sem o DDI
+ *   - mascara CPFs com e sem pontuação
+ *   - mascara e-mails, também codificados em URL
+ *   - mascara um e-mail colado ao domínio do anterior
+ *   - mascara texto longo sem e-mail em tempo linear
+ *   - mantém timestamps em milissegundos, números curtos e ids longos
+ *   - mascara toda ocorrência, inclusive as adjacentes
+ * - serializeRedisCommand
+ *   - mantém o comando e a chave mascarada, nunca os valores
+ *   - serializa um comando sem argumentos ou com chave binária
+ * - maskSpanAttributes
+ *   - reescreve só os atributos de URL e de consulta que carregam dado pessoal
+ *   - deixa como está um span sem atributos legíveis
+ */
+
 import { Span } from '@opentelemetry/api';
 import { maskPersonalData, maskSpanAttributes, serializeRedisCommand } from './personal-data';
 
+/** Testes */
 describe('personal-data', () => {
   describe('maskPersonalData', () => {
-    it('masks phone numbers with and without the country code', () => {
-      expect(maskPersonalData('mind:concierge:conversation-history:5521987654321')).toBe(
-        'mind:concierge:conversation-history:<redacted>',
+    it('mascara telefones com e sem o DDI', () => {
+      expect(maskPersonalData('mind:exemplo:conversation-history:5521987654321')).toBe(
+        'mind:exemplo:conversation-history:<redacted>',
       );
       expect(maskPersonalData('/customers/+5521987654321/orders')).toBe('/customers/<redacted>/orders');
       expect(maskPersonalData('phone=%2B552133334444')).toBe('phone=%2B<redacted>');
@@ -13,23 +32,23 @@ describe('personal-data', () => {
       expect(maskPersonalData('user_2133334444')).toBe('user_<redacted>');
     });
 
-    it('masks CPFs with and without punctuation', () => {
+    it('mascara CPFs com e sem pontuação', () => {
       expect(maskPersonalData('/people/123.456.789-09')).toBe('/people/<redacted>');
       expect(maskPersonalData('cpf=12345678909')).toBe('cpf=<redacted>');
     });
 
-    it('masks e-mails, also URL-encoded', () => {
+    it('mascara e-mails, também codificados em URL', () => {
       expect(maskPersonalData('email=ana.souza+mind@example.com.br&x=1')).toBe('email=<redacted>&x=1');
       expect(maskPersonalData('email=ana%40example.com')).toBe('email=<redacted>');
     });
 
-    it('masks an e-mail glued to the domain of the previous one', () => {
+    it('mascara um e-mail colado ao domínio do anterior', () => {
       expect(maskPersonalData('to=ana@example.com_bia@example.com')).toBe('to=<redacted><redacted>');
       expect(maskPersonalData('to=ana@example.co1bia@example.com')).toBe('to=<redacted><redacted>');
     });
 
-    it('masks long text without e-mails in linear time', () => {
-      /** O padrão anterior levava segundos com 100 mil caracteres; o linear leva menos de 1 ms. */
+    it('mascara texto longo sem e-mail em tempo linear', () => {
+      /** Tentar o e-mail em toda posição levaria segundos com 100 mil caracteres; em tempo linear, menos de 1 ms. */
       const longTexts = ['a'.repeat(100_000), 'a%40'.repeat(25_000), `x@${'a.1'.repeat(33_000)}`];
       const start = performance.now();
       for (const text of longTexts) {
@@ -38,7 +57,7 @@ describe('personal-data', () => {
       expect(performance.now() - start).toBeLessThan(500);
     });
 
-    it('keeps millisecond timestamps, short numbers and long ids', () => {
+    it('mantém timestamps em milissegundos, números curtos e ids longos', () => {
       expect(maskPersonalData('since=1761750000000&page=2&limit=100')).toBe('since=1761750000000&page=2&limit=100');
       expect(maskPersonalData('/orders/12345678/items/42')).toBe('/orders/12345678/items/42');
       expect(maskPersonalData('/messages/123456789012345678')).toBe('/messages/123456789012345678');
@@ -47,35 +66,36 @@ describe('personal-data', () => {
       );
     });
 
-    it('masks every occurrence, including adjacent ones', () => {
+    it('mascara toda ocorrência, inclusive as adjacentes', () => {
       expect(maskPersonalData('21987654321,21912345678')).toBe('<redacted>,<redacted>');
     });
   });
 
   describe('serializeRedisCommand', () => {
-    it('keeps the command and the masked key, never the values', () => {
-      expect(serializeRedisCommand('set', ['mind:concierge:5521987654321', '{"name":"Ana"}', 'EX', 3600])).toBe(
-        'set mind:concierge:<redacted> [3 other arguments]',
+    it('mantém o comando e a chave mascarada, nunca os valores', () => {
+      expect(serializeRedisCommand('set', ['mind:exemplo:5521987654321', '{"name":"Ana"}', 'EX', 3600])).toBe(
+        'set mind:exemplo:<redacted> [3 other arguments]',
       );
-      expect(serializeRedisCommand('get', ['mind:concierge:session:42'])).toBe('get mind:concierge:session:42');
+      expect(serializeRedisCommand('get', ['mind:exemplo:session:42'])).toBe('get mind:exemplo:session:42');
     });
 
-    it('serializes a command without arguments or with a binary key', () => {
+    it('serializa um comando sem argumentos ou com chave binária', () => {
       expect(serializeRedisCommand('ping', [])).toBe('ping');
       expect(serializeRedisCommand('get', [Buffer.from('key')])).toBe('get ?');
     });
   });
 
   describe('maskSpanAttributes', () => {
+    /** Factories/helpers: span falso com os atributos dados. */
     const spanWith = (attributes: Record<string, unknown>) =>
       ({ attributes, setAttribute: jest.fn() }) as unknown as Span;
 
-    it('rewrites only the URL and query attributes that carry personal data', () => {
+    it('reescreve só os atributos de URL e de consulta que carregam dado pessoal', () => {
       const span = spanWith({
         'url.full': 'https://api.example.com/customers/5521987654321?email=ana@example.com',
         'url.path': '/orders/42',
         'http.request.method': 'GET',
-        'db.query.text': 'get mind:concierge:21987654321',
+        'db.query.text': 'get mind:exemplo:21987654321',
       });
       maskSpanAttributes(span);
 
@@ -84,10 +104,10 @@ describe('personal-data', () => {
         'url.full',
         'https://api.example.com/customers/<redacted>?email=<redacted>',
       );
-      expect(span.setAttribute).toHaveBeenCalledWith('db.query.text', 'get mind:concierge:<redacted>');
+      expect(span.setAttribute).toHaveBeenCalledWith('db.query.text', 'get mind:exemplo:<redacted>');
     });
 
-    it('leaves a span without readable attributes alone', () => {
+    it('deixa como está um span sem atributos legíveis', () => {
       const span = { setAttribute: jest.fn() } as unknown as Span;
       expect(() => maskSpanAttributes(span)).not.toThrow();
       expect(span.setAttribute).not.toHaveBeenCalled();

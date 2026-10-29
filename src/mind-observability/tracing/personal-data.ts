@@ -3,15 +3,15 @@ import type { Attributes, Span } from '@opentelemetry/api';
 export const REDACTED = '<redacted>';
 
 /**
- * Dado pessoal mascarado antes de a telemetria sair do processo. O `otelcol.processor.transform.redact` do
- * mind-api-observability aplica os mesmos padrões como segunda barreira; mudar um lado pede mudar o outro. A ordem
- * importa: o e-mail sai primeiro, porque pode conter dígitos.
+ * Dado pessoal mascarado antes de a telemetria sair do processo. O coletor do mind-api-observability repete estes
+ * padrões como segunda barreira; mudar um lado pede mudar o outro. A ordem importa: o e-mail sai primeiro, porque pode
+ * conter dígitos.
  */
 const PERSONAL_DATA_PATTERNS: RegExp[] = [
   /**
    * E-mail, também com o @ codificado em URL. O começo só é tentado no início de uma sequência de caracteres de e-mail
-   * ou logo depois do domínio de um e-mail anterior: tentar em toda posição tornava o tempo quadrático numa sequência
-   * longa. Casa exatamente o mesmo que o padrão do collector.
+   * ou logo depois do domínio de um e-mail anterior, porque tentar em toda posição deixaria o tempo quadrático numa
+   * sequência longa.
    */
   /(?:(?<![A-Za-z0-9._%+-])|(?![A-Za-z])(?<=\.[A-Za-z]{2,}))[A-Za-z0-9._%+-]+(?:@|%40)[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g,
   /** CPF com pontuação. */
@@ -39,7 +39,7 @@ export function maskPersonalData(text: string): string {
 
 /**
  * Serializador de comando do ioredis: o nome do comando e a chave mascarada, nunca os valores. A chave costuma carregar
- * o telefone do cliente (`mind:concierge:conversation-history:<telefone>`).
+ * o telefone do cliente (`<prefixo>:<telefone>`).
  */
 export function serializeRedisCommand(cmdName: string, cmdArgs: unknown[]): string {
   if (cmdArgs.length === 0) {

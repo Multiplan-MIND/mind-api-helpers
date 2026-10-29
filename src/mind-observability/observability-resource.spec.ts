@@ -1,9 +1,18 @@
+/**
+ * Testes executados:
+ * - lê service.name e service.version do package.json do diretório de trabalho
+ * - usa o nome de serviço padrão sem um package.json legível
+ * - detecta a instância do serviço e o processo, sem a linha de comando, e deixa o env vencer
+ * - usa a lista oficial quando OTEL_NODE_RESOURCE_DETECTORS está definida
+ */
+
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { detectResources, envDetector } from '@opentelemetry/resources';
 import { createDefaultResource, createResourceDetectors } from './observability-resource';
 
+/** Testes */
 describe('observability-resource', () => {
   let dir: string;
 
@@ -13,21 +22,21 @@ describe('observability-resource', () => {
 
   afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
-  it('takes service.name and service.version from the package.json in the working directory', () => {
-    writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'mind-api-concierge', version: '0.7.0' }));
+  it('lê service.name e service.version do package.json do diretório de trabalho', () => {
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'mind-api-exemplo', version: '1.2.3' }));
     expect(createDefaultResource(dir).attributes).toMatchObject({
-      'service.name': 'mind-api-concierge',
-      'service.version': '0.7.0',
+      'service.name': 'mind-api-exemplo',
+      'service.version': '1.2.3',
     });
   });
 
-  it('falls back to the default service name without a readable package.json', () => {
+  it('usa o nome de serviço padrão sem um package.json legível', () => {
     expect(createDefaultResource(dir).attributes['service.name']).toMatch(/^unknown_service/);
     writeFileSync(join(dir, 'package.json'), '{ not json');
     expect(createDefaultResource(dir).attributes['service.name']).toMatch(/^unknown_service/);
   });
 
-  it('detects the service instance and the process, without the command line, and lets the env win', () => {
+  it('detecta a instância do serviço e o processo, sem a linha de comando, e deixa o env vencer', () => {
     const detectors = createResourceDetectors({});
     expect(detectors[detectors.length - 1]).toBe(envDetector);
     const attributes = detectResources({ detectors }).attributes;
@@ -37,7 +46,7 @@ describe('observability-resource', () => {
     expect(attributes).not.toHaveProperty('process.command_line');
   });
 
-  it('uses the official list when OTEL_NODE_RESOURCE_DETECTORS is set', () => {
+  it('usa a lista oficial quando OTEL_NODE_RESOURCE_DETECTORS está definida', () => {
     const previous = process.env.OTEL_NODE_RESOURCE_DETECTORS;
     process.env.OTEL_NODE_RESOURCE_DETECTORS = 'env';
     try {

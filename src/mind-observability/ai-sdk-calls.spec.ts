@@ -1,5 +1,14 @@
+/**
+ * Testes executados:
+ * - guarda o estado de uma chamada até ela terminar
+ * - expira as chamadas mais velhas que a idade máxima, e só elas
+ * - expira a chamada mais antiga quando o número máximo de chamadas abertas é atingido
+ * - reinicia um id de chamada no fim da ordem, com idade nova
+ */
+
 import { AiSdkCalls } from './ai-sdk-calls';
 
+/** Testes */
 describe('AiSdkCalls', () => {
   let clock: number;
   const now = () => clock;
@@ -8,7 +17,7 @@ describe('AiSdkCalls', () => {
     clock = 0;
   });
 
-  it('keeps the state of a call until it finishes', () => {
+  it('guarda o estado de uma chamada até ela terminar', () => {
     const calls = new AiSdkCalls<string>(jest.fn(), { now });
     calls.start('call-1', 'state');
     expect(calls.get('call-1')).toBe('state');
@@ -17,7 +26,7 @@ describe('AiSdkCalls', () => {
     expect(calls.finish('call-1')).toBeUndefined();
   });
 
-  it('expires the calls older than the maximum age, and only those', () => {
+  it('expira as chamadas mais velhas que a idade máxima, e só elas', () => {
     const onExpire = jest.fn();
     const calls = new AiSdkCalls<string>(onExpire, { now, maxAgeMs: 1000 });
     calls.start('old', 'old state');
@@ -32,7 +41,7 @@ describe('AiSdkCalls', () => {
     expect(calls.get('young')).toBe('young state');
   });
 
-  it('expires the oldest call when the maximum number of open calls is reached', () => {
+  it('expira a chamada mais antiga quando o número máximo de chamadas abertas é atingido', () => {
     const onExpire = jest.fn();
     const calls = new AiSdkCalls<string>(onExpire, { now, maxOpenCalls: 2 });
     calls.start('first', 'first state');
@@ -44,7 +53,7 @@ describe('AiSdkCalls', () => {
     expect(calls.get('third')).toBe('third state');
   });
 
-  it('restarts a call id at the end of the order, with a new age', () => {
+  it('reinicia um id de chamada no fim da ordem, com idade nova', () => {
     const onExpire = jest.fn();
     const calls = new AiSdkCalls<string>(onExpire, { now, maxAgeMs: 1000 });
     calls.start('call-1', 'first try');

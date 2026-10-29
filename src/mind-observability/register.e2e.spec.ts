@@ -1,3 +1,10 @@
+/**
+ * Testes executados:
+ * - manda spans mascarados, métricas do processo e do runtime e o recurso do serviço a partir de um serviço CommonJS
+ * - instrumenta os módulos carregados por import num serviço ES module
+ * - não manda nada e não carrega o SDK quando OTEL_SDK_DISABLED é true
+ */
+
 import { execFileSync, spawn } from 'node:child_process';
 import { createServer, Server } from 'node:http';
 import { AddressInfo } from 'node:net';
@@ -9,6 +16,7 @@ import { join, resolve } from 'node:path';
  * de dependência ou uma segunda cópia da API desliga a telemetria em silêncio.
  */
 
+/** Configuração: formato OTLP/JSON lido pelo receptor e caminhos da compilação e do serviço de teste. */
 interface OtlpAttribute {
   key: string;
   value: { stringValue?: string; intValue?: string | number };
@@ -26,13 +34,15 @@ interface Received {
   metricNames: string[];
 }
 
-const SPAN_KIND_SERVER = 2;
-const SPAN_KIND_CLIENT = 3;
-
 const root = resolve(__dirname, '../..');
 const outDir = join(root, 'node_modules/.cache/mind-observability-e2e');
 const serviceDir = join(__dirname, '__fixtures__/service');
 
+/** Fixtures: valores de `kind` do OTLP para os spans de entrada e de saída. */
+const SPAN_KIND_SERVER = 2;
+const SPAN_KIND_CLIENT = 3;
+
+/** Factories/helpers: leitura dos atributos OTLP, receptor em memória e execução do serviço de teste. */
 const attributesOf = (list: OtlpAttribute[] = []) =>
   Object.fromEntries(list.map(({ key, value }) => [key, value.stringValue ?? Number(value.intValue)]));
 
@@ -83,7 +93,8 @@ async function runService(args: string[], env: NodeJS.ProcessEnv): Promise<{ rec
 
 const spanOfKind = (received: Received, kind: number) => received.spans.find((span) => span.kind === kind);
 
-describe('register (end to end)', () => {
+/** Testes */
+describe('register (ponta a ponta)', () => {
   beforeAll(() => {
     execFileSync(
       process.execPath,
@@ -94,7 +105,7 @@ describe('register (end to end)', () => {
     );
   }, 120_000);
 
-  it('sends masked spans, process and runtime metrics and the service resource from a CommonJS service', async () => {
+  it('manda spans mascarados, métricas do processo e do runtime e o recurso do serviço a partir de um serviço CommonJS', async () => {
     const { received, stdout } = await runService(
       ['-r', join(outDir, 'mind-observability/register.js'), 'server.cjs'],
       {},
@@ -120,7 +131,7 @@ describe('register (end to end)', () => {
     expect(received.metricNames.some((name) => name.startsWith('v8js.') || name.startsWith('nodejs.'))).toBe(true);
   }, 60_000);
 
-  it('instruments modules loaded with import in an ES module service', async () => {
+  it('instrumenta os módulos carregados por import num serviço ES module', async () => {
     const { received, stdout } = await runService(
       ['-r', join(outDir, 'mind-observability/register.js'), 'server.mjs'],
       {},
@@ -131,7 +142,7 @@ describe('register (end to end)', () => {
     expect(spanOfKind(received, SPAN_KIND_CLIENT)).toBeDefined();
   }, 60_000);
 
-  it('sends nothing and does not load the SDK when OTEL_SDK_DISABLED is true', async () => {
+  it('não manda nada e não carrega o SDK quando OTEL_SDK_DISABLED é true', async () => {
     const { received, stdout } = await runService(
       ['-r', join(outDir, 'mind-observability/register.js'), 'server.cjs'],
       { OTEL_SDK_DISABLED: 'true' },

@@ -25,8 +25,8 @@ export function startObservabilitySdk(env: NodeJS.ProcessEnv): NodeSDK {
     resourceDetectors: createResourceDetectors(env),
     instrumentations: createInstrumentations(env),
     /**
-     * O NodeSDK mandaria os logs por OTLP por padrão, mas a linha de log já vai para o stdout e o collector não recebe
-     * logs. Um OTEL_LOGS_EXPORTER explícito continua valendo.
+     * O NodeSDK mandaria os logs por OTLP por padrão, mas a linha de log do serviço já sai pelo stdout. Um
+     * OTEL_LOGS_EXPORTER explícito é respeitado.
      */
     ...(env.OTEL_LOGS_EXPORTER ? {} : { logRecordProcessors: [] }),
   });

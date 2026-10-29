@@ -1,6 +1,6 @@
 /**
  * As rotas de saúde são ignoradas pelo sufixo, porque os serviços as montam sob um prefixo que muda por ambiente
- * (`/concierge/health`, `/<projeto>/<branch>/health`), e um padrão exato perderia a maioria.
+ * (`/<serviço>/health`, `/<serviço>/<ambiente>/health`), e um padrão exato perderia a maioria.
  */
 const DEFAULT_IGNORED_SUFFIXES = ['/health', '/health/live'];
 
