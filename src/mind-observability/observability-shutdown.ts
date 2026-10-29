@@ -45,7 +45,7 @@ export function registerShutdown(sdk: Flushable): void {
   process.once('beforeExit', () => void shutdown());
 }
 
-function flushWithTimeout(sdk: Flushable): Promise<void> {
+async function flushWithTimeout(sdk: Flushable): Promise<void> {
   let timer: NodeJS.Timeout;
   const timeout = new Promise<void>((resolve) => {
     timer = setTimeout(resolve, SHUTDOWN_TIMEOUT_MS);

@@ -9,6 +9,7 @@ import {
   osDetector,
   processDetector,
   Resource,
+  ResourceDetectionConfig,
   ResourceDetector,
   resourceFromAttributes,
   serviceInstanceIdDetector,
@@ -18,7 +19,7 @@ import {
 const PROCESS_ATTRIBUTES_LEFT_OUT = ['process.command_args', 'process.command_line'];
 
 const processDetectorWithoutArguments: ResourceDetector = {
-  detect: (config) => {
+  detect: (config: ResourceDetectionConfig) => {
     const { attributes = {} } = processDetector.detect(config);
     return {
       attributes: Object.fromEntries(
