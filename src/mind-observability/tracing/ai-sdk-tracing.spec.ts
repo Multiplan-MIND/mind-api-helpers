@@ -1,22 +1,23 @@
 import { context, SpanKind, SpanStatusCode, trace } from '@opentelemetry/api';
 import { AsyncLocalStorageContextManager } from '@opentelemetry/context-async-hooks';
-import {
-  BasicTracerProvider,
-  InMemorySpanExporter,
-  ReadableSpan,
-  SimpleSpanProcessor,
-} from '@opentelemetry/sdk-trace-base';
+import { InMemorySpanExporter, ReadableSpan, SimpleSpanProcessor, TracerProvider } from '@opentelemetry/sdk-trace';
 import { createAiSdkTracing } from './ai-sdk-tracing';
 
 const exporter = new InMemorySpanExporter();
-const provider = new BasicTracerProvider({ spanProcessors: [new SimpleSpanProcessor(exporter)] });
+const provider = new TracerProvider({ spanProcessors: [new SimpleSpanProcessor({ exporter })] });
 const tracer = provider.getTracer('test');
 const contextManager = new AsyncLocalStorageContextManager();
 
 const spanNamed = (name: string): ReadableSpan => exporter.getFinishedSpans().find((span) => span.name === name);
 const parentOf = (span: ReadableSpan) => span.parentSpanContext?.spanId;
 
-const start = { callId: 'call-1', operationId: 'ai.generateText', provider: 'google.generative-ai', modelId: 'gemini' };
+const start = {
+  callId: 'call-1',
+  operationId: 'ai.generateText',
+  provider: 'google.generative-ai',
+  modelId: 'gemini',
+  tools: { getPaymentLink: {}, lookup: {} },
+};
 const toolResult = { callId: 'call-1', toolCall: { toolCallId: 'tool-1' }, toolOutput: { type: 'tool-result' } };
 
 describe('createAiSdkTracing', () => {
@@ -133,6 +134,32 @@ describe('createAiSdkTracing', () => {
     expect(exporter.getFinishedSpans()).toHaveLength(2);
     expect(spanNamed('invoke_agent gemini').attributes['gen_ai.response.aborted']).toBe(true);
     expect(spanNamed('invoke_agent gemini').status.code).toBe(SpanStatusCode.UNSET);
+  });
+
+  it('names the root span chat when the call has no tools', () => {
+    const tracing = createAiSdkTracing(tracer);
+    tracing.onStart({ ...start, tools: undefined });
+    tracing.onLanguageModelCallStart({ callId: 'call-1' });
+    tracing.onLanguageModelCallEnd({ callId: 'call-1' });
+    tracing.onEnd({ callId: 'call-1' });
+
+    const chatSpans = exporter.getFinishedSpans().filter((span) => span.name === 'chat gemini');
+    expect(chatSpans).toHaveLength(2);
+    expect(chatSpans.map((span) => span.attributes['gen_ai.operation.name'])).toEqual(['chat', 'chat']);
+  });
+
+  it('closes a call the AI SDK never ended as a timeout error, open children included', () => {
+    const tracing = createAiSdkTracing(tracer, { maxOpenCalls: 1 });
+    tracing.onStart(start);
+    tracing.onLanguageModelCallStart({ callId: 'call-1' });
+    tracing.onStart({ ...start, callId: 'call-2' });
+
+    const root = spanNamed('invoke_agent gemini');
+    expect(root.status.code).toBe(SpanStatusCode.ERROR);
+    expect(root.attributes['error.type']).toBe('timeout');
+    expect(spanNamed('chat gemini').status.code).toBe(SpanStatusCode.ERROR);
+    expect(() => tracing.onEnd({ callId: 'call-1' })).not.toThrow();
+    expect(exporter.getFinishedSpans()).toHaveLength(2);
   });
 
   it('never records prompts, replies, tool arguments or tool results', () => {

@@ -1,4 +1,5 @@
 import { Histogram, Meter } from '@opentelemetry/api';
+import { AiSdkCalls, AiSdkCallsOptions, CALL_TIMEOUT_ERROR_TYPE } from '../ai-sdk-calls';
 import {
   ErrorEvent,
   LanguageModelCallEndEvent,
@@ -14,7 +15,7 @@ interface CallState {
   modelCall?: { startedAt: number; attributes: Record<string, string> };
 }
 
-/** The AI SDK telemetry integration interface, reduced to the callbacks implemented here. */
+/** A interface de integração de telemetria do AI SDK, reduzida aos callbacks implementados aqui. */
 export interface AiSdkMetricsIntegration {
   onStart(event: OperationStartEvent): void;
   onLanguageModelCallStart(event: LanguageModelCallStartEvent): void;
@@ -24,18 +25,17 @@ export interface AiSdkMetricsIntegration {
   onError(error: unknown): void;
 }
 
-function errorType(error: unknown): string {
+function errorTypeOf(error: unknown): string {
   return error instanceof Error ? error.name : '_OTHER';
 }
 
 /**
- * Builds an AI SDK telemetry integration that records, for every model round trip, the GenAI metrics of the semantic
- * conventions: `gen_ai.client.token.usage` (one point per token type) and `gen_ai.client.operation.duration`, with
- * `error.type` when the request fails. Attributes are limited to operation, provider and model, so cardinality stays
- * closed.
+ * Monta uma integração de telemetria do AI SDK que registra, a cada ida ao modelo, as métricas GenAI das convenções
+ * semânticas: `gen_ai.client.token.usage` (um ponto por tipo de token) e `gen_ai.client.operation.duration`, com
+ * `error.type` quando a requisição falha ou nunca termina. Os atributos se limitam a operação, provedor e modelo, para
+ * a cardinalidade ficar fechada. As durações vêm do relógio monotônico, que ajustes de relógio não movem.
  */
-export function createAiSdkMetrics(meter: Meter): AiSdkMetricsIntegration {
-  const calls = new Map<string, CallState>();
+export function createAiSdkMetrics(meter: Meter, options?: AiSdkCallsOptions): AiSdkMetricsIntegration {
   const tokenUsage: Histogram = meter.createHistogram('gen_ai.client.token.usage', {
     description: 'Number of input and output tokens used',
     unit: '{token}',
@@ -45,19 +45,21 @@ export function createAiSdkMetrics(meter: Meter): AiSdkMetricsIntegration {
     unit: 's',
   });
 
-  const endModelCall = (state: CallState, error?: unknown): void => {
+  const endModelCall = (state: CallState, errorType?: string): void => {
     if (!state.modelCall) return;
     const { startedAt, attributes } = state.modelCall;
     operationDuration.record(
-      (Date.now() - startedAt) / 1000,
-      error === undefined ? attributes : { ...attributes, 'error.type': errorType(error) },
+      (performance.now() - startedAt) / 1000,
+      errorType === undefined ? attributes : { ...attributes, 'error.type': errorType },
     );
     state.modelCall = undefined;
   };
 
+  const calls = new AiSdkCalls<CallState>((state) => endModelCall(state, CALL_TIMEOUT_ERROR_TYPE), options);
+
   return {
     onStart(event) {
-      calls.set(event.callId, {
+      calls.start(event.callId, {
         providerName: mapProviderName(event.provider),
         requestModel: event.modelId ?? 'unknown',
       });
@@ -67,7 +69,7 @@ export function createAiSdkMetrics(meter: Meter): AiSdkMetricsIntegration {
       const state = calls.get(event.callId);
       if (!state) return;
       state.modelCall = {
-        startedAt: Date.now(),
+        startedAt: performance.now(),
         attributes: {
           'gen_ai.operation.name': 'chat',
           'gen_ai.provider.name': event.provider ? mapProviderName(event.provider) : state.providerName,
@@ -91,25 +93,22 @@ export function createAiSdkMetrics(meter: Meter): AiSdkMetricsIntegration {
     },
 
     onEnd(event) {
-      const state = calls.get(event.callId);
+      const state = calls.finish(event.callId);
       if (!state) return;
       endModelCall(state);
-      calls.delete(event.callId);
     },
 
     onAbort(event) {
-      const state = calls.get(event.callId);
+      const state = calls.finish(event.callId);
       if (!state) return;
       endModelCall(state);
-      calls.delete(event.callId);
     },
 
     onError(error) {
       const event = error as ErrorEvent;
-      const state = event?.callId ? calls.get(event.callId) : undefined;
+      const state = event?.callId ? calls.finish(event.callId) : undefined;
       if (!state) return;
-      endModelCall(state, event.error ?? error);
-      calls.delete(event.callId);
+      endModelCall(state, errorTypeOf(event.error ?? error));
     },
   };
 }

@@ -1,12 +1,12 @@
 /**
- * Health routes are ignored by suffix because services mount them under a prefix that changes per environment
- * (`/concierge/health`, `/<project>/<branch>/health`), so an exact default would miss most of them.
+ * As rotas de saúde são ignoradas pelo sufixo, porque os serviços as montam sob um prefixo que muda por ambiente
+ * (`/concierge/health`, `/<projeto>/<branch>/health`), e um padrão exato perderia a maioria.
  */
 const DEFAULT_IGNORED_SUFFIXES = ['/health', '/health/live'];
 
 /**
- * Builds the list of extra paths that must not be traced from `raw` (a comma-separated list, usually
- * TRACING_IGNORE_PATHS). The health routes are always ignored, see `ignoreIncomingRequest`.
+ * Monta, a partir de `raw` (lista separada por vírgula, em geral TRACING_IGNORE_PATHS), os caminhos extras que não
+ * geram trace. As rotas de saúde são sempre ignoradas, ver `ignoreIncomingRequest`.
  */
 export function parseIgnorePaths(raw?: string): string[] {
   const extras = (raw ?? '')
@@ -17,8 +17,8 @@ export function parseIgnorePaths(raw?: string): string[] {
 }
 
 /**
- * Returns a predicate for the http instrumentation `ignoreIncomingRequestHook`: true when the request path (the url
- * without its query string) ends with `/health` or `/health/live`, or exactly equals one of `paths`.
+ * Devolve o predicado do `ignoreIncomingRequestHook` da instrumentação http: verdadeiro quando o caminho da requisição
+ * (a url sem a query string) termina em `/health` ou `/health/live`, ou é igual a um dos `paths`.
  */
 export function ignoreIncomingRequest(paths: string[]): (req: { url?: string }) => boolean {
   return (req) => {

@@ -11,4 +11,5 @@ export * from './mind-logger/mind-logger.providers';
 export * from './mind-logger/mind-logger.service';
 export * from './mind-logger/mind-logger.util';
 export * from './mind-mongoose/helpers/query.helper';
-export * from './mind-observability/tracing/trace-id';
+export * from './mind-observability/observability-shutdown';
+export * from './mind-observability/tracing/active-span';

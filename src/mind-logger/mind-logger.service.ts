@@ -1,7 +1,7 @@
 import { Injectable, LoggerService, Scope } from '@nestjs/common';
 import { MindLoggerFactory } from './mind-logger.factory';
 import { jsonError } from '../mind-helpers/error.helper';
-import { currentTraceId } from '../mind-observability/tracing/trace-id';
+import { currentSpanIds, markActiveSpanWithLog } from '../mind-observability/tracing/active-span';
 
 @Injectable({
   scope: Scope.TRANSIENT,
@@ -15,10 +15,12 @@ export class MindLoggerService {
     this.loggerService?.log(message, this.context(prefix));
   }
   error(message: string, prefix?: string, err?: unknown) {
+    markActiveSpanWithLog('error');
     if (err) message += ` | ${JSON.stringify(jsonError(err))}`;
     this.loggerService?.error(message, (err as Error)?.stack, this.context(prefix));
   }
   warn(message: string, prefix?: string) {
+    markActiveSpanWithLog('warn');
     this.loggerService?.warn(message, this.context(prefix));
   }
   debug?(message: string, prefix?: string) {
@@ -28,10 +30,10 @@ export class MindLoggerService {
     this.loggerService?.verbose(message, this.context(prefix));
   }
 
-  // The trace id is read here, at the call site, because winston may format the line after the active span has ended.
+  // The span ids are read here, at the call site, because winston may format the line after the active span has ended.
   private context(prefix?: string) {
-    const traceId = currentTraceId();
-    return { module: this.module, prefix, ...(traceId ? { traceId } : {}) };
+    const spanIds = currentSpanIds();
+    return { module: this.module, prefix, ...(spanIds ?? {}) };
   }
 
   setModule(module: string) {

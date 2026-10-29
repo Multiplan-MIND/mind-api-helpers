@@ -1,11 +1,11 @@
-import type { NodeSDKConfiguration } from '@opentelemetry/sdk-node';
+import type { InstrumentationConfigMap } from '@opentelemetry/auto-instrumentations-node';
 
 /**
- * Builds the instrumentations that only produce metrics: event loop, heap and GC of the Node runtime. The package is
- * loaded with `require` inside the function, so importing this file loads nothing from OpenTelemetry.
+ * Opções das instrumentações que só produzem métricas. A `runtime-node` (event loop, heap e GC) não precisa de nenhuma.
+ * A `host-metrics` fica restrita ao processo: CPU e memória do nó inteiro são do cluster, não do serviço.
  */
-export function createMetricsInstrumentations(): NodeSDKConfiguration['instrumentations'] {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { RuntimeNodeInstrumentation } = require('@opentelemetry/instrumentation-runtime-node');
-  return [new RuntimeNodeInstrumentation()];
+export function metricsInstrumentationConfig(): InstrumentationConfigMap {
+  return {
+    '@opentelemetry/instrumentation-host-metrics': { metricGroups: ['process.cpu', 'process.memory'] },
+  };
 }

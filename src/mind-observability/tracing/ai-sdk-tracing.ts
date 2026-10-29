@@ -1,4 +1,5 @@
 import { Context, context, Span, SpanKind, SpanStatusCode, trace, Tracer } from '@opentelemetry/api';
+import { AiSdkCalls, AiSdkCallsOptions, CALL_TIMEOUT_ERROR_TYPE } from '../ai-sdk-calls';
 import {
   ErrorEvent,
   LanguageModelCallEndEvent,
@@ -20,7 +21,7 @@ interface CallState {
   tools: Map<string, { span: Span; context: Context }>;
 }
 
-/** The AI SDK telemetry integration interface, reduced to the callbacks implemented here. */
+/** A interface de integração de telemetria do AI SDK, reduzida aos callbacks implementados aqui. */
 export interface AiSdkTracingIntegration {
   onStart(event: OperationStartEvent): void;
   onLanguageModelCallStart(event: LanguageModelCallStartEvent): void;
@@ -44,17 +45,17 @@ function recordError(span: Span, error: unknown): void {
 }
 
 /**
- * Builds an AI SDK telemetry integration that turns every `generateText`/`streamText`/`embed` call into spans that
- * follow the GenAI semantic conventions: one `invoke_agent <model>` span per call, one `chat <model>` span per model
- * round trip and one `execute_tool <name>` span per tool execution. Model requests and tool executions run inside their
- * spans, so the HTTP, database and queue spans they produce nest under them.
+ * Monta uma integração de telemetria do AI SDK que transforma cada chamada de `generateText`, `streamText` e `embed` em
+ * spans das convenções semânticas GenAI: um span raiz por chamada (`invoke_agent <modelo>` com ferramentas,
+ * `chat <modelo>` sem), um span `chat <modelo>` por ida ao modelo e um span `execute_tool <nome>` por execução de
+ * ferramenta. As requisições ao modelo e as ferramentas rodam dentro dos seus spans, então os spans de HTTP, banco e
+ * fila que elas geram ficam aninhados. Uma chamada que o AI SDK nunca encerra é fechada como erro com
+ * `error.type=timeout` (ver `AiSdkCalls`).
  *
- * Prompts, replies, tool arguments and tool results are never recorded: they carry customer data, and a shared library
- * cannot know each service's rules for it.
+ * Prompt, resposta, argumentos e resultado de ferramenta nunca são gravados: carregam dado de cliente, e uma biblioteca
+ * compartilhada não conhece as regras de cada serviço para ele.
  */
-export function createAiSdkTracing(tracer: Tracer): AiSdkTracingIntegration {
-  const calls = new Map<string, CallState>();
-
+export function createAiSdkTracing(tracer: Tracer, options?: AiSdkCallsOptions): AiSdkTracingIntegration {
   const endModelCall = (state: CallState, error?: unknown): void => {
     if (!state.modelCall) return;
     if (error !== undefined) recordError(state.modelCall.span, error);
@@ -70,9 +71,20 @@ export function createAiSdkTracing(tracer: Tracer): AiSdkTracingIntegration {
     state.tools.clear();
   };
 
+  const expire = (state: CallState): void => {
+    const timeout = new Error('AI SDK call did not end within the maximum age');
+    endModelCall(state, timeout);
+    endTools(state, timeout);
+    recordError(state.root, timeout);
+    state.root.setAttribute('error.type', CALL_TIMEOUT_ERROR_TYPE);
+    state.root.end();
+  };
+
+  const calls = new AiSdkCalls<CallState>(expire, options);
+
   return {
     onStart(event) {
-      const operationName = mapOperationName(event.operationId);
+      const operationName = mapOperationName(event);
       const providerName = mapProviderName(event.provider);
       const requestModel = event.modelId ?? 'unknown';
       const root = tracer.startSpan(`${operationName} ${requestModel}`, {
@@ -86,7 +98,7 @@ export function createAiSdkTracing(tracer: Tracer): AiSdkTracingIntegration {
           ...(event.maxOutputTokens != null ? { 'gen_ai.request.max_tokens': event.maxOutputTokens } : {}),
         },
       });
-      calls.set(event.callId, {
+      calls.start(event.callId, {
         root,
         rootContext: trace.setSpan(context.active(), root),
         providerName,
@@ -158,7 +170,7 @@ export function createAiSdkTracing(tracer: Tracer): AiSdkTracingIntegration {
     },
 
     onEnd(event) {
-      const state = calls.get(event.callId);
+      const state = calls.finish(event.callId);
       if (!state) return;
       endModelCall(state);
       endTools(state);
@@ -169,29 +181,26 @@ export function createAiSdkTracing(tracer: Tracer): AiSdkTracingIntegration {
       });
       if (event.finishReason === 'error') state.root.setStatus({ code: SpanStatusCode.ERROR });
       state.root.end();
-      calls.delete(event.callId);
     },
 
     onAbort(event) {
-      const state = calls.get(event.callId);
+      const state = calls.finish(event.callId);
       if (!state) return;
       endModelCall(state);
       endTools(state);
       state.root.setAttribute('gen_ai.response.aborted', true);
       state.root.end();
-      calls.delete(event.callId);
     },
 
     onError(error) {
       const event = error as ErrorEvent;
-      const state = event?.callId ? calls.get(event.callId) : undefined;
+      const state = event?.callId ? calls.finish(event.callId) : undefined;
       if (!state) return;
       const cause = event.error ?? error;
       endModelCall(state, cause);
       endTools(state, cause);
       recordError(state.root, cause);
       state.root.end();
-      calls.delete(event.callId);
     },
 
     executeLanguageModelCall({ callId, execute }) {

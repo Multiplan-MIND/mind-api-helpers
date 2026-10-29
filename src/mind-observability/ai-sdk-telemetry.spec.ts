@@ -13,10 +13,17 @@ describe('ai-sdk-telemetry', () => {
     expect(mapProviderName(undefined)).toBe('unknown');
   });
 
-  it('maps AI SDK operation ids to GenAI operation names', () => {
-    expect(mapOperationName('ai.generateText')).toBe('invoke_agent');
-    expect(mapOperationName('ai.embedMany')).toBe('embeddings');
-    expect(mapOperationName('ai.custom')).toBe('ai.custom');
+  it('maps text generation with tools to invoke_agent and without tools to chat', () => {
+    expect(mapOperationName({ operationId: 'ai.generateText', tools: { lookup: {} } })).toBe('invoke_agent');
+    expect(mapOperationName({ operationId: 'ai.streamText', tools: { lookup: {} } })).toBe('invoke_agent');
+    expect(mapOperationName({ operationId: 'ai.generateText' })).toBe('chat');
+    expect(mapOperationName({ operationId: 'ai.streamText', tools: {} })).toBe('chat');
+  });
+
+  it('maps the other AI SDK operation ids to GenAI operation names', () => {
+    expect(mapOperationName({ operationId: 'ai.generateObject' })).toBe('chat');
+    expect(mapOperationName({ operationId: 'ai.embedMany' })).toBe('embeddings');
+    expect(mapOperationName({ operationId: 'ai.custom' })).toBe('ai.custom');
   });
 
   it('appends integrations to the global list the AI SDK reads', () => {

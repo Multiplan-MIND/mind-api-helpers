@@ -1,6 +1,13 @@
 /**
- * Minimal shapes of the AI SDK (`ai` >= 7) telemetry events, shared by the tracing and the metrics integrations. Only
- * the fields read here are declared, so the library does not depend on `ai` and keeps working across its minor versions.
+ * Versão das convenções semânticas GenAI que os spans e as métricas seguem. Essas convenções ainda estão em
+ * desenvolvimento e renomeiam atributos entre versões, por isso o tracer e o meter a declaram como schema URL.
+ */
+export const GEN_AI_SCHEMA_URL = 'https://opentelemetry.io/schemas/1.44.0';
+
+/**
+ * Formatos mínimos dos eventos de telemetria do AI SDK (`ai` >= 7), compartilhados pelas integrações de tracing e de
+ * métricas. Só os campos lidos aqui são declarados, para a biblioteca não depender do `ai` e continuar funcionando
+ * entre as versões minor dele.
  */
 export interface OperationStartEvent {
   callId: string;
@@ -10,6 +17,8 @@ export interface OperationStartEvent {
   functionId?: string;
   temperature?: number;
   maxOutputTokens?: number;
+  /** O conjunto de ferramentas; só se lê se ele tem alguma. */
+  tools?: object;
 }
 
 export interface Usage {
@@ -67,17 +76,18 @@ const PROVIDER_NAMES: [string, string][] = [
   ['xai', 'x_ai'],
 ];
 
+/** Geração de texto com ferramentas é um loop de agente; sem ferramentas é um chat, novas tentativas incluídas. */
+const TEXT_GENERATION_OPERATIONS = ['ai.generateText', 'ai.streamText'];
+
 const OPERATION_NAMES: Record<string, string> = {
-  'ai.generateText': 'invoke_agent',
-  'ai.streamText': 'invoke_agent',
-  'ai.generateObject': 'invoke_agent',
-  'ai.streamObject': 'invoke_agent',
+  'ai.generateObject': 'chat',
+  'ai.streamObject': 'chat',
   'ai.embed': 'embeddings',
   'ai.embedMany': 'embeddings',
   'ai.rerank': 'rerank',
 };
 
-/** Maps an AI SDK provider id (`google.generative-ai`) to the `gen_ai.provider.name` of the semantic conventions. */
+/** Converte o id de provedor do AI SDK (`google.generative-ai`) no `gen_ai.provider.name` das convenções semânticas. */
 export function mapProviderName(provider?: string): string {
   if (!provider) return 'unknown';
   const lower = provider.toLowerCase();
@@ -87,14 +97,20 @@ export function mapProviderName(provider?: string): string {
   return match ? match[1] : provider;
 }
 
-/** Maps an AI SDK operation id (`ai.generateText`) to the `gen_ai.operation.name` of the semantic conventions. */
-export function mapOperationName(operationId: string): string {
-  return OPERATION_NAMES[operationId] ?? operationId;
+/**
+ * Converte uma operação do AI SDK (`ai.generateText` e as ferramentas dela) no `gen_ai.operation.name` das convenções
+ * semânticas: `invoke_agent` para geração de texto com ferramentas, `chat` sem elas.
+ */
+export function mapOperationName(event: Pick<OperationStartEvent, 'operationId' | 'tools'>): string {
+  if (TEXT_GENERATION_OPERATIONS.includes(event.operationId)) {
+    return event.tools && Object.keys(event.tools).length > 0 ? 'invoke_agent' : 'chat';
+  }
+  return OPERATION_NAMES[event.operationId] ?? event.operationId;
 }
 
 /**
- * Appends an integration to `globalThis.AI_SDK_TELEMETRY_INTEGRATIONS`, which the AI SDK (`ai` >= 7) reads on every
- * call that does not pass its own `telemetry.integrations`. A service without the AI SDK only gets an unused array.
+ * Acrescenta uma integração a `globalThis.AI_SDK_TELEMETRY_INTEGRATIONS`, que o AI SDK (`ai` >= 7) lê em toda chamada
+ * sem `telemetry.integrations` própria. Um serviço sem o AI SDK fica só com uma lista sem uso.
  */
 export function registerAiSdkIntegration(integration: object): void {
   const globalScope = globalThis as { AI_SDK_TELEMETRY_INTEGRATIONS?: unknown[] };

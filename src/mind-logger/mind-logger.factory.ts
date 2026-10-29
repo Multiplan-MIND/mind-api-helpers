@@ -14,12 +14,13 @@ const formatMeta = (meta) => {
   return '';
 };
 
-// The trace id goes last and only when the call ran inside a span, so the fields before it keep their positions.
+// The trace and span ids go last and only when the call ran inside a span, so the fields before them keep their
+// positions.
 const mtsLoggerFormat = format.printf(({ context, level, message, timestamp, ms, ...meta }) => {
-  const traceId = context?.traceId ? ` | trace_id=${context.traceId}` : '';
+  const spanIds = context?.traceId ? ` | trace_id=${context.traceId} span_id=${context.spanId}` : '';
   return `${timestamp} [${context?.module || context}][${level}][${context?.prefix || ''}] ${message} | ${
     meta && formatMeta(meta)
-  } | ${ms}${traceId}`;
+  } | ${ms}${spanIds}`;
 });
 
 export const MindLoggerFactory = (module: string): LoggerService => {

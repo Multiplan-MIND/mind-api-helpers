@@ -52,6 +52,33 @@ describe('createAiSdkMetrics', () => {
     expect(histograms['gen_ai.client.token.usage']).not.toHaveBeenCalled();
   });
 
+  it('records the duration of a model call that never ended as a timeout', () => {
+    const aiSdkMetrics = createAiSdkMetrics(meter, { maxOpenCalls: 1 });
+    aiSdkMetrics.onStart(start);
+    aiSdkMetrics.onLanguageModelCallStart({ callId: 'call-1' });
+    aiSdkMetrics.onStart({ ...start, callId: 'call-2' });
+
+    expect(histograms['gen_ai.client.operation.duration']).toHaveBeenCalledWith(expect.any(Number), {
+      ...chatAttributes,
+      'error.type': 'timeout',
+    });
+  });
+
+  it('measures the duration with the monotonic clock', () => {
+    const now = jest
+      .spyOn(performance, 'now')
+      .mockReturnValueOnce(0)
+      .mockReturnValueOnce(1000)
+      .mockReturnValueOnce(3500);
+    const aiSdkMetrics = createAiSdkMetrics(meter);
+    aiSdkMetrics.onStart(start);
+    aiSdkMetrics.onLanguageModelCallStart({ callId: 'call-1' });
+    aiSdkMetrics.onLanguageModelCallEnd({ callId: 'call-1' });
+    now.mockRestore();
+
+    expect(histograms['gen_ai.client.operation.duration']).toHaveBeenCalledWith(2.5, chatAttributes);
+  });
+
   it('records nothing for an unknown call', () => {
     const aiSdkMetrics = createAiSdkMetrics(meter);
     aiSdkMetrics.onLanguageModelCallStart({ callId: 'missing' });
