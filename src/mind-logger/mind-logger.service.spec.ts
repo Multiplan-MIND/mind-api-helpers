@@ -1,4 +1,5 @@
 import { LoggerService } from '@nestjs/common';
+import { Span, trace } from '@opentelemetry/api';
 import { Test } from '@nestjs/testing';
 
 import { createMindLoggerProviders } from './mind-logger.providers';
@@ -193,6 +194,41 @@ describe('MindLoggerService', () => {
       mindLoggerService.info('Test Info without prefix');
 
       expect(winston.log).toHaveBeenCalledWith('Test Info without prefix', { module: 'TestModule', prefix: undefined });
+    });
+
+    it('should add the trace and span ids of the active span', () => {
+      const traceId = '0af7651916cd43dd8448eb211c80319c';
+      const spanId = 'b7ad6b7169203331';
+      const span = {
+        spanContext: () => ({ traceId, spanId, traceFlags: 1 }),
+        setAttribute: jest.fn(),
+      } as unknown as Span;
+      const getActiveSpan = jest.spyOn(trace, 'getActiveSpan').mockReturnValue(span);
+
+      mindLoggerService.info('Test Info', prefix);
+      mindLoggerService.error('Test Error', prefix, new Error('Errorrrr'));
+
+      expect(winston.log).toHaveBeenCalledWith('Test Info', { module: 'TestModule', prefix, traceId, spanId });
+      expect(lastError().context).toEqual({ module: 'TestModule', prefix, traceId, spanId });
+      getActiveSpan.mockRestore();
+    });
+
+    it('should mark the active span on warn and error, and not on the other levels', () => {
+      const span = {
+        spanContext: () => ({ traceId: '0af7651916cd43dd8448eb211c80319c', spanId: 'b7ad6b7169203331', traceFlags: 1 }),
+        setAttribute: jest.fn(),
+      } as unknown as Span;
+      const getActiveSpan = jest.spyOn(trace, 'getActiveSpan').mockReturnValue(span);
+
+      mindLoggerService.info('Test Info', prefix);
+      mindLoggerService.debug('Test Debug', prefix);
+      expect(span.setAttribute).not.toHaveBeenCalled();
+
+      mindLoggerService.warn('Test Warn', prefix);
+      mindLoggerService.error('Test Error', prefix);
+      expect(span.setAttribute).toHaveBeenCalledWith('mind.log.warn', true);
+      expect(span.setAttribute).toHaveBeenCalledWith('mind.log.error', true);
+      getActiveSpan.mockRestore();
     });
   });
 
