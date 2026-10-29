@@ -26,9 +26,9 @@ describe('startObservability', () => {
     expect(startObservabilitySdk).not.toHaveBeenCalled();
   });
 
-  it('starts the SDK with the environment and the options when on', () => {
-    expect(startObservability(endpoint, { esm: true })).toEqual({ started: true });
-    expect(startObservabilitySdk).toHaveBeenCalledWith(endpoint, { esm: true });
+  it('starts the SDK with the environment when on', () => {
+    expect(startObservability(endpoint)).toEqual({ started: true });
+    expect(startObservabilitySdk).toHaveBeenCalledWith(endpoint);
   });
 
   it('swallows an SDK failure: one line on stderr and the app keeps running', () => {

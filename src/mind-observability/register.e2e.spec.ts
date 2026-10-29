@@ -4,9 +4,9 @@ import { AddressInfo } from 'node:net';
 import { join, resolve } from 'node:path';
 
 /**
- * End to end: compiles the library, starts a real service with `-r register` (and `--import register-esm`) and checks
- * what reaches an in-memory OTLP receiver. The other specs mock the SDK; this one fails when an upgrade, a dependency
- * change or a second API copy silently stops the telemetry.
+ * Ponta a ponta: compila a biblioteca, sobe um serviço real, CommonJS e ES module, com `-r register` e confere o
+ * que chega a um receptor OTLP em memória. As outras specs simulam o SDK; esta falha quando uma atualização, uma troca
+ * de dependência ou uma segunda cópia da API desliga a telemetria em silêncio.
  */
 
 interface OtlpAttribute {
@@ -121,11 +121,12 @@ describe('register (end to end)', () => {
   }, 60_000);
 
   it('instruments modules loaded with import in an ES module service', async () => {
-    const { received } = await runService(
-      ['--import', join(outDir, 'mind-observability/register-esm.js'), 'server.mjs'],
+    const { received, stdout } = await runService(
+      ['-r', join(outDir, 'mind-observability/register.js'), 'server.mjs'],
       {},
     );
 
+    expect(stdout).toContain('esm-patched=true');
     expect(spanOfKind(received, SPAN_KIND_SERVER)).toBeDefined();
     expect(spanOfKind(received, SPAN_KIND_CLIENT)).toBeDefined();
   }, 60_000);

@@ -18,16 +18,13 @@ export function isObservabilityEnabled(env: NodeJS.ProcessEnv): boolean {
  * serviço, ligado ou não, e um `import()` só resolveria depois de a aplicação ter carregado os módulos a alterar. Uma
  * falha do SDK vai para o stderr e nunca para a aplicação.
  */
-export function startObservability(
-  env: NodeJS.ProcessEnv = process.env,
-  options: ObservabilitySdk.ObservabilitySdkOptions = {},
-): NodeSDK | undefined {
+export function startObservability(env: NodeJS.ProcessEnv = process.env): NodeSDK | undefined {
   if (!isObservabilityEnabled(env)) {
     return undefined;
   }
   try {
     const { startObservabilitySdk }: typeof ObservabilitySdk = module.require('./observability-sdk');
-    return startObservabilitySdk(env, options);
+    return startObservabilitySdk(env);
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     process.stderr.write(

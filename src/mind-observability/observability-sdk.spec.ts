@@ -1,6 +1,7 @@
 import { diag } from '@opentelemetry/api';
 import { NodeSDK } from '@opentelemetry/sdk-node';
 import { warnAboutNewerApiCopies } from './api-copies';
+import { registerEsmLoaderHook } from './esm-loader-hook';
 import { createInstrumentations } from './instrumentations';
 import { startObservabilitySdk } from './observability-sdk';
 import { registerShutdown } from './observability-shutdown';
@@ -11,6 +12,7 @@ jest.mock('@opentelemetry/sdk-node', () => ({
 jest.mock('./instrumentations', () => ({ createInstrumentations: jest.fn(() => []) }));
 jest.mock('./observability-shutdown', () => ({ registerShutdown: jest.fn() }));
 jest.mock('./api-copies', () => ({ warnAboutNewerApiCopies: jest.fn() }));
+jest.mock('./esm-loader-hook', () => ({ registerEsmLoaderHook: jest.fn() }));
 
 type Integrations = { AI_SDK_TELEMETRY_INTEGRATIONS?: unknown[] };
 
@@ -46,8 +48,9 @@ describe('startObservabilitySdk', () => {
     expect(sdkConfig()).not.toHaveProperty('logRecordProcessors');
   });
 
-  it('registers the AI SDK integrations, the shutdown and the API copy check', () => {
+  it('registers the ESM loader hook, the AI SDK integrations, the shutdown and the API copy check', () => {
     const sdk = startObservabilitySdk({});
+    expect(registerEsmLoaderHook).toHaveBeenCalledTimes(1);
     expect((globalThis as Integrations).AI_SDK_TELEMETRY_INTEGRATIONS).toHaveLength(2);
     expect(registerShutdown).toHaveBeenCalledWith(sdk);
     expect(warnAboutNewerApiCopies).toHaveBeenCalledTimes(1);
