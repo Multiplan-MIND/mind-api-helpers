@@ -46,6 +46,9 @@ describe('createInstrumentations', () => {
     expect(config['@opentelemetry/instrumentation-ioredis'].dbStatementSerializer('get', ['k:21987654321'])).toBe(
       'get k:<redacted>',
     );
+    expect(config['@opentelemetry/instrumentation-redis'].dbStatementSerializer('get', ['k:21987654321'])).toBe(
+      'get k:<redacted>',
+    );
     expect(config['@opentelemetry/instrumentation-mongodb'].enhancedDatabaseReporting).toBe(false);
     expect(config['@opentelemetry/instrumentation-graphql'].ignoreResolveSpans).toBe(true);
   });

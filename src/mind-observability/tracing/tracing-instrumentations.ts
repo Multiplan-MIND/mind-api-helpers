@@ -17,7 +17,9 @@ export function tracingInstrumentationConfig(env: NodeJS.ProcessEnv): Instrument
     '@opentelemetry/instrumentation-undici': { requestHook: maskSpanAttributes },
     /** Um span por middleware (jsonParser, urlencodedParser) só aumenta o volume; ficam o roteador e o handler. */
     '@opentelemetry/instrumentation-express': { ignoreLayersType: [ExpressLayerType.MIDDLEWARE] },
+    /** Os dois clientes de Redis gravam a chave, que costuma carregar o telefone do cliente. */
     '@opentelemetry/instrumentation-ioredis': { dbStatementSerializer: serializeRedisCommand },
+    '@opentelemetry/instrumentation-redis': { dbStatementSerializer: serializeRedisCommand },
     /** Explícito de propósito: o relatório estendido poria os valores das consultas no span. */
     '@opentelemetry/instrumentation-mongodb': { enhancedDatabaseReporting: false },
     /** Um span por resolver multiplicaria os spans de cada consulta; o span de execução já traz a operação. */

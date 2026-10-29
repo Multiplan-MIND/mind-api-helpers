@@ -51,7 +51,7 @@ Todas as instrumentações do pacote oficial ficam ativas, cada uma inerte até 
 | `winston` | desligada: o `MindLoggerService` já escreve o trace id na linha |
 | `host-metrics` | ligada, só com as métricas do processo |
 | `express` | sem spans de middleware |
-| `ioredis` | comando e chave mascarada, nunca os valores |
+| `ioredis` e `redis` | comando e chave mascarada, nunca os valores |
 | `mongodb` | consultas com os valores trocados por `?` |
 | `graphql` | sem spans por resolver |
 
