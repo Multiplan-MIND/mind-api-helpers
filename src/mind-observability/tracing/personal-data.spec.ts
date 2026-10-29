@@ -23,6 +23,21 @@ describe('personal-data', () => {
       expect(maskPersonalData('email=ana%40example.com')).toBe('email=<redacted>');
     });
 
+    it('masks an e-mail glued to the domain of the previous one', () => {
+      expect(maskPersonalData('to=ana@example.com_bia@example.com')).toBe('to=<redacted><redacted>');
+      expect(maskPersonalData('to=ana@example.co1bia@example.com')).toBe('to=<redacted><redacted>');
+    });
+
+    it('masks long text without e-mails in linear time', () => {
+      /** O padrão anterior levava segundos com 100 mil caracteres; o linear leva menos de 1 ms. */
+      const longTexts = ['a'.repeat(100_000), 'a%40'.repeat(25_000), `x@${'a.1'.repeat(33_000)}`];
+      const start = performance.now();
+      for (const text of longTexts) {
+        expect(maskPersonalData(text)).toBe(text);
+      }
+      expect(performance.now() - start).toBeLessThan(500);
+    });
+
     it('keeps millisecond timestamps, short numbers and long ids', () => {
       expect(maskPersonalData('since=1761750000000&page=2&limit=100')).toBe('since=1761750000000&page=2&limit=100');
       expect(maskPersonalData('/orders/12345678/items/42')).toBe('/orders/12345678/items/42');

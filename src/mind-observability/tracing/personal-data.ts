@@ -8,8 +8,12 @@ export const REDACTED = '<redacted>';
  * importa: o e-mail sai primeiro, porque pode conter dígitos.
  */
 const PERSONAL_DATA_PATTERNS: RegExp[] = [
-  /** E-mail, também com o @ codificado em URL. */
-  /[A-Za-z0-9._%+-]+(?:@|%40)[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g,
+  /**
+   * E-mail, também com o @ codificado em URL. O começo só é tentado no início de uma sequência de caracteres de e-mail
+   * ou logo depois do domínio de um e-mail anterior: tentar em toda posição tornava o tempo quadrático numa sequência
+   * longa. Casa exatamente o mesmo que o padrão do collector.
+   */
+  /(?:(?<![A-Za-z0-9._%+-])|(?![A-Za-z])(?<=\.[A-Za-z]{2,}))[A-Za-z0-9._%+-]+(?:@|%40)[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g,
   /** CPF com pontuação. */
   /\d{3}\.\d{3}\.\d{3}-\d{2}/g,
   /** Telefone com DDI 55, com ou sem o sinal de mais. */
