@@ -42,6 +42,8 @@ export const NEST_10_FEDERATION_LINK =
 export const federationLinkOf = (options: ApolloFederationDriverConfig) => {
   const { federation } = options.autoSchemaFile as SchemaFileConfig;
   const config = federation as Federation2Config;
-  const typeDefs = new TypeDefsDecoratorFactory().create(config.version, 2).decorate('type Query { ok: Boolean }', config);
+  const typeDefs = new TypeDefsDecoratorFactory()
+    .create(config.version, 2)
+    .decorate('type Query { ok: Boolean }', config);
   return typeDefs.trim().split('\n')[0].trim();
 };

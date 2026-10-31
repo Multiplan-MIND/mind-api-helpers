@@ -5,7 +5,7 @@ import { pathToRegexp } from 'path-to-regexp';
 import GraphQLJSON from 'graphql-type-json';
 
 import { GraphqlAuthJwksService } from './graphql-auth-jwks.service';
-import { MIND_FEDERATION_CONFIG } from './graphql-federation.config';
+import { getMindFederationConfig } from './graphql-federation.config';
 import {
   createLoggerMock,
   EMPTY_IDENTITY,
@@ -52,7 +52,7 @@ describe('GraphqlAuthJwksService', () => {
 
       expect(options).toMatchObject({
         path: '/*splat/graphql',
-        autoSchemaFile: { path: 'schema.gql', federation: MIND_FEDERATION_CONFIG },
+        autoSchemaFile: { path: 'schema.gql', federation: getMindFederationConfig() },
         sortSchema: true,
         playground: false,
         resolvers: { JSON: GraphQLJSON },
