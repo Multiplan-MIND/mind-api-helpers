@@ -1,74 +1,103 @@
-// `graphql` is a peer of graphql-type-json and is not installed in this package.
-jest.mock('graphql-type-json', () => ({ __esModule: true, default: {} }));
+import GraphQLJSON from 'graphql-type-json';
 
 import { GraphqlAuthGatewayService } from './graphql-auth-gateway.service';
-import { createLoggerMock, createRedisMock } from './jwt.test-support';
+import { getMindFederationConfig } from './graphql-federation.config';
+import {
+  createLoggerMock,
+  EMPTY_IDENTITY,
+  federationLinkOf,
+  LoggerMock,
+  NEST_10_FEDERATION_LINK,
+  resolveContext,
+} from './graphql-auth.spec-helper';
+import { createRedisMock } from './jwt.test-support';
+
+// Stubs the scalar instead of installing `graphql`; see graphql-auth.spec-helper.ts for the reason
+jest.mock('graphql-type-json', () => ({ __esModule: true, default: { name: 'JSON' } }));
 
 describe('GraphqlAuthGatewayService', () => {
-  let logger: ReturnType<typeof createLoggerMock>;
-  let context: (arg: { req: any }) => any;
+  let logger: LoggerMock;
+  let service: GraphqlAuthGatewayService;
 
-  beforeEach(async () => {
+  beforeEach(() => {
     logger = createLoggerMock();
-    const service = new GraphqlAuthGatewayService(logger as any, createRedisMock() as any);
-    context = (await service.createGqlOptions()).context as any;
+    service = new GraphqlAuthGatewayService(logger as any, createRedisMock() as any);
   });
 
-  it('should build the identity from the mind-* headers', () => {
-    const ctx = context({
-      req: {
-        headers: {
-          'mind-user-id': 'u1',
-          'mind-user-roles': 'admin,user-viewer',
-          'mind-session-expires-in': '2030-01-01T00:00:00.000Z',
-          'mind-session-id': 'sess-1',
-          'mind-request-ip': '203.0.113.7',
-          'x-forwarded-for': '1.2.3.4',
+  describe('createGqlOptions', () => {
+    it('should build the federation 2 options on the default path', async () => {
+      const options = await service.createGqlOptions();
+
+      expect(options).toMatchObject({
+        autoSchemaFile: { path: 'schema.gql', federation: getMindFederationConfig() },
+        sortSchema: true,
+        playground: false,
+        resolvers: { JSON: GraphQLJSON },
+        resolverValidationOptions: { requireResolversToMatchSchema: 'warn' },
+      });
+      expect(options.path).toBeUndefined();
+      expect(options.plugins).toHaveLength(1);
+      expect(options.context).toEqual(expect.any(Function));
+    });
+
+    it('should declare the NestJS 10 federation link (v2.3, 11 directives) in the generated subgraph SDL', async () => {
+      const options = await service.createGqlOptions();
+
+      expect(federationLinkOf(options)).toBe(NEST_10_FEDERATION_LINK);
+    });
+  });
+
+  describe('context', () => {
+    const identityHeaders = {
+      'mind-user-id': 'u1',
+      'mind-user-roles': 'admin,user-viewer',
+      'mind-session-expires-in': '2030-01-01T00:00:00.000Z',
+    };
+
+    it('should return an empty identity when the gateway headers are absent', async () => {
+      await expect(resolveContext(service, {})).resolves.toEqual(EMPTY_IDENTITY);
+    });
+
+    it('should trust the identity injected by the gateway, including the session id', async () => {
+      await expect(resolveContext(service, { ...identityHeaders, 'mind-session-id': 'sess-1' })).resolves.toMatchObject(
+        {
+          mindUserId: 'u1',
+          mindUserRoles: ['admin', 'user-viewer'],
+          mindSessionExpiresIn: new Date('2030-01-01T00:00:00.000Z'),
+          mindSessionId: 'sess-1',
         },
-      },
+      );
     });
 
-    expect(ctx.mindUserId).toBe('u1');
-    expect(ctx.mindUserRoles).toEqual(['admin', 'user-viewer']);
-    expect(ctx.mindSessionExpiresIn).toEqual(new Date('2030-01-01T00:00:00.000Z'));
-    expect(ctx.mindSessionId).toBe('sess-1');
-    expect(ctx.mindRequestInfo.ip).toBe('203.0.113.7');
-  });
-
-  it('should ignore X-Forwarded-For and req.ip (the router address) for the client ip', () => {
-    const ctx = context({ req: { ip: '10.0.0.9', headers: { 'x-forwarded-for': '1.2.3.4' } } });
-    expect(ctx.mindRequestInfo.ip).toBeNull();
-  });
-
-  it('should normalize mind-session-id like the other headers', () => {
-    const base = { 'mind-user-id': 'u1', 'mind-user-roles': 'admin', 'mind-session-expires-in': '2030-01-01' };
-    expect(context({ req: { headers: { ...base, 'mind-session-id': '  sess-1 ' } } }).mindSessionId).toBe('sess-1');
-    expect(context({ req: { headers: { ...base, 'mind-session-id': '' } } }).mindSessionId).toBeNull();
-  });
-
-  it('should leave mindSessionId null when the header is absent', () => {
-    const ctx = context({
-      req: { headers: { 'mind-user-id': 'u1', 'mind-user-roles': 'admin', 'mind-session-expires-in': '2030-01-01' } },
+    it('should keep the user id and default the roles to empty when the roles header is missing', async () => {
+      await expect(resolveContext(service, { 'mind-user-id': 'u1' })).resolves.toMatchObject({
+        mindUserId: 'u1',
+        mindUserRoles: [],
+      });
+      expect(logger.error).not.toHaveBeenCalled();
     });
-    expect(ctx.mindSessionId).toBeNull();
-  });
 
-  it('should return an empty identity without mind-user-id', () => {
-    const ctx = context({ req: { headers: { 'user-agent': 'jest' } } });
-    expect(ctx.mindUserId).toBeNull();
-    expect(ctx.mindRequestInfo.userAgent).toBe('jest');
-  });
+    it('should normalize mind-session-id like the other headers', async () => {
+      const withSid = (value: string) => resolveContext(service, { ...identityHeaders, 'mind-session-id': value });
 
-  it('should throw 401 UNAUTHENTICATED and log when roles header is missing', () => {
-    expect(() => context({ req: { headers: { 'mind-user-id': 'u1' } } })).toThrow(
-      expect.objectContaining({ extensions: { code: 'UNAUTHENTICATED', http: { status: 401 } } }),
-    );
-    expect(logger.error).toHaveBeenCalled();
-  });
+      await expect(withSid('  sess-1 ')).resolves.toMatchObject({ mindSessionId: 'sess-1' });
+      await expect(withSid('')).resolves.toMatchObject({ mindSessionId: null });
+      await expect(resolveContext(service, identityHeaders)).resolves.toMatchObject({ mindSessionId: null });
+    });
 
-  it('should expose the federation options', async () => {
-    const service = new GraphqlAuthGatewayService(logger as any, createRedisMock() as any);
-    const options = await service.createGqlOptions();
-    expect(options.playground).toBe(false);
+    it('should read the client ip from mind-request-ip, ignoring X-Forwarded-For and req.ip (the router address)', async () => {
+      const ctx = await resolveContext(
+        service,
+        { 'mind-request-ip': '203.0.113.7', 'x-forwarded-for': '1.2.3.4', 'user-agent': 'jest' },
+        { ip: '10.0.0.9' },
+      );
+
+      expect(ctx).toMatchObject({ mindRequestInfo: { ip: '203.0.113.7', userAgent: 'jest' } });
+      await expect(
+        resolveContext(service, { 'x-forwarded-for': '1.2.3.4' }, { ip: '10.0.0.9' }),
+      ).resolves.toMatchObject({
+        mindRequestInfo: { ip: null },
+      });
+    });
   });
 });

@@ -6,13 +6,12 @@ import { Inject, Injectable } from '@nestjs/common';
 import { GqlOptionsFactory } from '@nestjs/graphql';
 import { ApolloFederationDriverConfig } from '@nestjs/apollo';
 import { Redis } from 'ioredis';
-import { ApolloServerPluginLandingPageLocalDefault } from '@apollo/server/plugin/landingPage/default';
-import GraphQLJSON from 'graphql-type-json';
 
 import { MindLoggerService } from '../mind-logger/mind-logger.service';
 import { MindLogger } from '../mind-logger/mind-logger.decorator';
 import { logPrefix } from '../mind-logger/mind-logger.util';
 import { SessionCheck, checkSession, parseRequireSid } from '../mind-session/session.helper';
+import { buildMindGqlOptions } from './graphql-options.builder';
 import { unauthenticatedError } from './unauthenticated.error';
 import { extractRequestInfo } from '../mind-session/request-info.helper';
 
@@ -29,15 +28,11 @@ export class GraphqlAuthJwksService implements GqlOptionsFactory<ApolloFederatio
   }
 
   async createGqlOptions(): Promise<ApolloFederationDriverConfig> {
-    return {
-      path: `/*/graphql`,
-      autoSchemaFile: { path: 'schema.gql', federation: 2 },
-      sortSchema: true,
-      playground: false,
-      plugins: [ApolloServerPluginLandingPageLocalDefault()],
-      resolvers: { JSON: GraphQLJSON },
+    return buildMindGqlOptions({
+      // Serves /<any prefix>/graphql; Express 5 (path-to-regexp 8) requires a named wildcard
+      path: '/*splat/graphql',
       context: ({ req }) => this.mindHandleContext({ req }),
-    };
+    });
   }
 
   private async getPublicKey(kid) {
@@ -78,7 +73,7 @@ export class GraphqlAuthJwksService implements GqlOptionsFactory<ApolloFederatio
           await this.assertSessionAllowed(decoded.sid, req, _log);
           ctx.mindUserId = decoded.mindUserId;
           ctx.mindUserRoles = decoded.mindUserRoles;
-          ctx.mindSessionExpiresIn = decoded.mindSessionExpiresIn;
+          ctx.mindSessionExpiresIn = expiresIn;
           ctx.mindSessionId = decoded.sid ?? null;
         } else {
           this.logger.error(`Session Expired: ${expiresIn.toISOString()} x ${now.toISOString()}`, _log);

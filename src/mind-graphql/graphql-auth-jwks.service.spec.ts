@@ -1,17 +1,28 @@
 import axios from 'axios';
-import { ApolloServer, HeaderMap } from '@apollo/server';
 import * as jwkToPem from 'jwk-to-pem';
 import * as jwt from 'jsonwebtoken';
+import { pathToRegexp } from 'path-to-regexp';
+import GraphQLJSON from 'graphql-type-json';
 
 import { GraphqlAuthJwksService } from './graphql-auth-jwks.service';
-import { RsaKeys, createLoggerMock, createRedisMock, createRsaKeys, signToken } from './jwt.test-support';
+import { getMindFederationConfig } from './graphql-federation.config';
+import {
+  EMPTY_IDENTITY,
+  LoggerMock,
+  NEST_10_FEDERATION_LINK,
+  UNAUTHENTICATED,
+  createLoggerMock,
+  federationLinkOf,
+} from './graphql-auth.spec-helper';
+import { RsaKeys, createRedisMock, createRsaKeys, signToken } from './jwt.test-support';
 
-// `graphql` is a peer of graphql-type-json and is not installed in this package.
-jest.mock('graphql-type-json', () => ({ __esModule: true, default: {} }));
+// Stubs the scalar and GraphQLError instead of installing `graphql`; see graphql-auth.spec-helper.ts for the reason
+jest.mock('graphql-type-json', () => ({ __esModule: true, default: { name: 'JSON' } }));
+jest.mock('graphql', () => ({ GraphQLError: jest.requireActual('./graphql-auth.spec-helper').GraphQLErrorStub }), {
+  virtual: true,
+});
 jest.mock('axios');
 const mockedAxios = axios as jest.Mocked<typeof axios>;
-
-const UNAUTHENTICATED = { extensions: { code: 'UNAUTHENTICATED', http: { status: 401 } } };
 
 describe('GraphqlAuthJwksService', () => {
   const keys: RsaKeys = createRsaKeys('kid-1');
@@ -20,7 +31,7 @@ describe('GraphqlAuthJwksService', () => {
   const past = () => new Date(Date.now() - 3600_000).toISOString();
 
   let redis: ReturnType<typeof createRedisMock>;
-  let logger: ReturnType<typeof createLoggerMock>;
+  let logger: LoggerMock;
   let service: GraphqlAuthJwksService;
   let context: (arg: { req: any }) => Promise<any>;
 
@@ -59,6 +70,10 @@ describe('GraphqlAuthJwksService', () => {
     expect(ctx.mindRequestInfo.userAgent).toBe('jest');
   });
 
+  it('should return an empty identity when there is no authorization header', async () => {
+    await expect(context({ req: { headers: {} } })).resolves.toEqual(EMPTY_IDENTITY);
+  });
+
   it('should return an empty identity for a non-Bearer or empty token', async () => {
     const ctx = await context({ req: { headers: { authorization: 'Bearer ' } } });
     expect(ctx.mindUserId).toBeNull();
@@ -75,6 +90,7 @@ describe('GraphqlAuthJwksService', () => {
     expect(ctx.mindUserId).toBe('u1');
     expect(ctx.mindUserRoles).toEqual(['admin']);
     expect(ctx.mindSessionId).toBe('sess-1');
+    expect(ctx.mindSessionExpiresIn).toBeInstanceOf(Date);
     expect(redis.eval).toHaveBeenCalledWith(expect.stringContaining('EXISTS'), 0, 'mind:session:revoked:sess-1');
   });
 
@@ -109,7 +125,7 @@ describe('GraphqlAuthJwksService', () => {
 
       expect(ctx.mindUserId).toBe('u1');
       expect(ctx.mindSessionId).toBeNull();
-      expect(logger.warn).not.toHaveBeenCalled();
+      expect(logger.error).not.toHaveBeenCalled();
       expect(redis.eval).not.toHaveBeenCalled();
     });
 
@@ -232,32 +248,36 @@ describe('GraphqlAuthJwksService', () => {
     });
   });
 
-  it('should answer 401 through Apollo Server (not an anonymous 200) when the context rejects', async () => {
-    redis.eval.mockResolvedValue(1);
-    const token = signToken(keys, validPayload({ sid: 'sess-1' }));
-    const server = new ApolloServer({
-      typeDefs: 'type Query { hello: String }',
-      resolvers: { Query: { hello: () => 'hi' } },
+  describe('createGqlOptions', () => {
+    it('should build the federation 2 options served under any prefix', async () => {
+      const options = await service.createGqlOptions();
+
+      expect(options).toMatchObject({
+        path: '/*splat/graphql',
+        autoSchemaFile: { path: 'schema.gql', federation: getMindFederationConfig() },
+        sortSchema: true,
+        playground: false,
+        resolvers: { JSON: GraphQLJSON },
+        resolverValidationOptions: { requireResolversToMatchSchema: 'warn' },
+      });
+      expect(options.plugins).toHaveLength(1);
+      expect(options.context).toEqual(expect.any(Function));
     });
-    await server.start();
 
-    const response = await server.executeHTTPGraphQLRequest({
-      httpGraphQLRequest: {
-        method: 'POST',
-        headers: new HeaderMap([['content-type', 'application/json']]),
-        search: '',
-        body: { query: '{ hello }' },
-      },
-      context: () => context({ req: reqWith(token) }),
+    it('should declare the NestJS 10 federation link (v2.3, 11 directives) in the generated subgraph SDL', async () => {
+      const options = await service.createGqlOptions();
+
+      expect(federationLinkOf(options)).toBe(NEST_10_FEDERATION_LINK);
     });
-    await server.stop();
 
-    expect(response.status).toBe(401);
-  });
+    it('should use a path that Express 5 (path-to-regexp 8) accepts and that matches any prefix', async () => {
+      const { path } = await service.createGqlOptions();
 
-  it('should expose the federation options', async () => {
-    const options = await service.createGqlOptions();
-    expect(options.path).toBe('/*/graphql');
-    expect(options.playground).toBe(false);
+      const { regexp } = pathToRegexp(path, { end: false });
+      expect(regexp.test('/user/graphql')).toBe(true);
+      expect(regexp.test('/a/b/graphql')).toBe(true);
+      expect(regexp.test('/user/graphql/x')).toBe(true);
+      expect(regexp.test('/graphql')).toBe(false);
+    });
   });
 });

@@ -21,7 +21,3 @@ export function signToken(keys: RsaKeys, payload: Record<string, any>, options: 
 export function createRedisMock() {
   return { get: jest.fn(), set: jest.fn(), eval: jest.fn(), pipeline: jest.fn() };
 }
-
-export function createLoggerMock() {
-  return { info: jest.fn(), error: jest.fn(), warn: jest.fn(), debug: jest.fn() };
-}

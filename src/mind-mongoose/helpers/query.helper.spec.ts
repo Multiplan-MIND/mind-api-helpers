@@ -8,97 +8,127 @@ import {
 } from '../../mind-graphql/entities/query.entities';
 import { getOptions, getQuery } from './query.helper';
 
-// `graphql` is a peer of @nestjs/graphql and is not installed in this package; only the decorators are needed here.
+// `graphql` is deliberately not a devDependency: consumers install this package with its devDependencies nested,
+// and a second `graphql` copy there breaks their schema (`Int` from another realm). Stub the decorators instead.
 jest.mock('@nestjs/graphql', () => ({
   Field: () => () => undefined,
   InputType: () => () => undefined,
-  registerEnumType: () => undefined,
-  Int: {},
+  registerEnumType: jest.fn(),
+  Int: 'Int',
 }));
 
-const f = (partial: Partial<FieldFilterInput>) => partial as FieldFilterInput;
+// The input types declare `Date`/`ObjectId`, but GraphQL delivers strings at runtime, which is what `getQuery` casts
+const filter = (field: string, op: OperationEnum, values: Record<string, unknown>): FieldFilterInput =>
+  ({ field, op, ...values }) as unknown as FieldFilterInput;
 
 describe('getQuery', () => {
-  it('should return an empty query without filters', () => {
+  const hex = '64b7f0c2a3b4c5d6e7f80910';
+  const otherHex = '64b7f0c2a3b4c5d6e7f80911';
+
+  it('should return an empty query when there are no filters', () => {
     expect(getQuery(undefined)).toEqual({});
     expect(getQuery([])).toEqual({});
   });
 
-  it.each([
-    [OperationEnum.eq, { name: 'a' }],
-    [OperationEnum.ne, { name: { $ne: 'a' } }],
-    [OperationEnum.in, { name: { $in: ['a'] } }],
-    [OperationEnum.nin, { name: { $nin: ['a'] } }],
-    [OperationEnum.gte, { name: { $gte: 'a' } }],
-    [OperationEnum.lte, { name: { $lte: 'a' } }],
-    [OperationEnum.regex, { name: { $regex: 'a', $options: 'i' } }],
-    [OperationEnum.boolean, { name: 'a' }],
-    [OperationEnum.exists, { name: { $exists: 'a' } }],
-  ])('should map operation %p', (op, expected) => {
-    expect(getQuery([f({ field: 'name', op, stringValue: 'a' })])).toEqual(expected);
+  it('should build eq and ne from a single scalar value', () => {
+    expect(getQuery([filter('name', OperationEnum.eq, { stringValue: 'a' })])).toEqual({ name: 'a' });
+    expect(getQuery([filter('age', OperationEnum.ne, { intValue: 3 })])).toEqual({ age: { $ne: 3 } });
+    expect(getQuery([filter('active', OperationEnum.boolean, { boolValue: false })])).toEqual({ active: false });
   });
 
-  it('should map between and notBetween', () => {
-    expect(getQuery([f({ field: 'n', op: OperationEnum.between, intValues: [1, 5] })])).toEqual({
-      n: { $gte: 1, $lte: 5 },
+  it('should build in and nin from a list of values', () => {
+    expect(getQuery([filter('name', OperationEnum.in, { stringValues: ['a', 'b'] })])).toEqual({
+      name: { $in: ['a', 'b'] },
     });
-    expect(getQuery([f({ field: 'n', op: OperationEnum.notBetween, intValues: [1, 5] })])).toEqual({
-      n: { $lte: 1, $gte: 5 },
-    });
+    expect(getQuery([filter('age', OperationEnum.nin, { intValues: [1, 2] })])).toEqual({ age: { $nin: [1, 2] } });
   });
 
-  it('should convert each value type', () => {
-    expect(getQuery([f({ field: 'n', op: OperationEnum.eq, intValue: 7 })])).toEqual({ n: 7 });
-    expect(getQuery([f({ field: 'b', op: OperationEnum.eq, boolValue: false })])).toEqual({ b: false });
-    expect(getQuery([f({ field: 'b', op: OperationEnum.in, boolValues: [true, false] })])).toEqual({
-      b: { $in: [true, false] },
-    });
-    expect(getQuery([f({ field: 'd', op: OperationEnum.eq, dateValue: '2024-01-01' as any })])).toEqual({
-      d: new Date('2024-01-01'),
-    });
-    expect(
-      getQuery([f({ field: 'd', op: OperationEnum.in, dateValues: ['2024-01-01', '2024-02-01'] as any })]),
-    ).toEqual({ d: { $in: [new Date('2024-01-01'), new Date('2024-02-01')] } });
-  });
+  describe('objectId values', () => {
+    // The ObjectId is built with the `mongoose` that resolves from this library, so its bson major must match the
+    // consumer's: that is why the peer range is a single Mongoose major
+    it.each([
+      ['eq', OperationEnum.eq, (value: unknown) => value],
+      ['ne', OperationEnum.ne, (value: unknown) => ({ $ne: value })],
+    ])('should cast objectIdValue to an ObjectId for %s', (_name, op, wrap) => {
+      const query = getQuery([filter('_id', op, { objectIdValue: hex })]);
 
-  it('should convert object ids', () => {
-    const id = new Types.ObjectId();
-    expect(getQuery([f({ field: '_id', op: OperationEnum.eq, objectIdValue: id.toString() as any })])).toEqual({
-      _id: id,
+      const expected = wrap(new Types.ObjectId(hex));
+      expect(query).toEqual({ _id: expected });
+      const id = (op === OperationEnum.eq ? query['_id'] : query['_id'].$ne) as Types.ObjectId;
+      expect(id).toBeInstanceOf(Types.ObjectId);
+      expect(id.toHexString()).toBe(hex);
     });
-    expect(getQuery([f({ field: '_id', op: OperationEnum.in, objectIdValues: [id.toString()] as any })])).toEqual({
-      _id: { $in: [id] },
+
+    it.each([
+      ['in', OperationEnum.in, '$in'],
+      ['nin', OperationEnum.nin, '$nin'],
+    ])('should cast objectIdValues to ObjectIds for %s', (_name, op, operator) => {
+      const ids = getQuery([filter('ref', op, { objectIdValues: [hex, otherHex] })])['ref'][operator];
+
+      expect(ids).toHaveLength(2);
+      ids.forEach((id: unknown) => expect(id).toBeInstanceOf(Types.ObjectId));
+      expect(ids.map((id: Types.ObjectId) => id.toHexString())).toEqual([hex, otherHex]);
     });
   });
 
-  it('should combine several filters', () => {
-    expect(
-      getQuery([
-        f({ field: 'a', op: OperationEnum.eq, stringValue: '1' }),
-        f({ field: 'b', op: OperationEnum.ne, stringValue: '2' }),
-      ]),
-    ).toEqual({ a: '1', b: { $ne: '2' } });
+  it('should cast date values to Date for the date operators', () => {
+    const query = getQuery([
+      filter('createdAt', OperationEnum.between, { dateValues: ['2030-01-01T00:00:00Z', '2030-02-01T00:00:00Z'] }),
+      filter('updatedAt', OperationEnum.gte, { dateValue: '2030-03-01T00:00:00Z' }),
+      filter('deletedAt', OperationEnum.lte, { dateValue: '2030-04-01T00:00:00Z' }),
+    ]);
+
+    expect(query).toEqual({
+      createdAt: { $gte: new Date('2030-01-01T00:00:00Z'), $lte: new Date('2030-02-01T00:00:00Z') },
+      updatedAt: { $gte: new Date('2030-03-01T00:00:00Z') },
+      deletedAt: { $lte: new Date('2030-04-01T00:00:00Z') },
+    });
+  });
+
+  it('should invert the bounds for notBetween, as the current behavior does', () => {
+    const query = getQuery([filter('age', OperationEnum.notBetween, { intValues: [10, 20] })]);
+
+    expect(query).toEqual({ age: { $lte: 10, $gte: 20 } });
+  });
+
+  it('should build regex (case-insensitive) and exists', () => {
+    expect(getQuery([filter('name', OperationEnum.regex, { stringValue: '^a' })])).toEqual({
+      name: { $regex: '^a', $options: 'i' },
+    });
+    expect(getQuery([filter('name', OperationEnum.exists, { boolValue: true })])).toEqual({
+      name: { $exists: true },
+    });
+  });
+
+  it('should combine several filters on different fields', () => {
+    const query = getQuery([
+      filter('name', OperationEnum.eq, { stringValue: 'a' }),
+      filter('age', OperationEnum.gte, { intValue: 18 }),
+    ]);
+
+    expect(query).toEqual({ name: 'a', age: { $gte: 18 } });
   });
 });
 
 describe('getOptions', () => {
-  it('should default to skip 0 and limit 100', () => {
+  it('should default to skip 0 and limit 100 when no options are given', () => {
     expect(getOptions()).toEqual({ skip: 0, limit: 100 });
   });
 
-  it('should map skip, limit and sort', () => {
+  it('should honour the given skip, limit and sort direction', () => {
     const opt = {
-      skip: 10,
-      limit: 5,
+      skip: 5,
+      limit: 20,
       sort: [
+        { field: 'updatedAt', sort: SortEnum.DESC },
         { field: 'name', sort: SortEnum.ASC },
-        { field: 'createdAt', sort: SortEnum.DESC },
       ],
     } as QueryOptionsInput;
-    expect(getOptions(opt)).toEqual({ skip: 10, limit: 5, sort: [{ name: 1 }, { createdAt: -1 }] });
+
+    expect(getOptions(opt)).toEqual({ skip: 5, limit: 20, sort: [{ updatedAt: -1 }, { name: 1 }] });
   });
 
-  it('should return an empty sort list when only limit is informed', () => {
-    expect(getOptions({ limit: 3 } as QueryOptionsInput)).toEqual({ limit: 3, sort: [] });
+  it('should leave skip and limit out when they are falsy and return an empty sort', () => {
+    expect(getOptions({ skip: 0, limit: 0 } as QueryOptionsInput)).toEqual({ sort: [] });
   });
 });
