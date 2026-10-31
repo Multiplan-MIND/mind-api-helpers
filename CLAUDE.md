@@ -15,22 +15,24 @@ it is re-exported there.
 ## Commands
 
 `.nvmrc` selects Node 24 (`24`, the newest 24.x installed in nvm), `engines.node` is `>=24` (no upper
-bound) and the package manager is **yarn** (v1 / classic).
+bound) and the package manager is **yarn** (v1 / classic). Tests need Node >= 24.9: the NestJS 12 packages are
+ESM-only and Jest 30 can only `require()` them from that version on.
 
 ```bash
-nvm use                                   # picks Node 24 from .nvmrc
+nvm use                                   # required: Jest needs Node >= 24.9 (require(esm))
 yarn install                              # see the install cycle warning below
 yarn build                                # tsc -> dist/ (prebuild wipes dist via rimraf)
 yarn lint                                 # eslint (prettier runs as an eslint rule)
 yarn lint-autofix
-yarn test                                 # jest, config in jest.config.json, testRegex .spec.ts$
+yarn test                                 # node --experimental-vm-modules jest; config in jest.config.json
 yarn test src/mind-helpers               # one directory
 yarn test -t 'should preserve subclasses' # one test by name
 ```
 
-There is no watch/coverage script; use `yarn test --watch` / `--coverage` directly. `.vscode/launch.json`
-provides an "API Helpers - Jest" debug configuration, still hardcoded to `$NVM_DIR/versions/node/v20.20.2`
-(not the `.nvmrc` version), so it needs that exact Node installed in nvm.
+There is no watch/coverage script; use `yarn test --watch` / `--coverage` directly. The `test` script runs Jest
+under `node --experimental-vm-modules`; without the flag every suite that imports `@nestjs/*` fails with
+`Must use import to load ES Module` (NestJS 12 ships ESM only). `.vscode/launch.json` provides an
+"API Helpers - Jest" debug configuration (nvm `runtimeVersion` 24, same flag in `runtimeArgs`).
 
 ## How this library is distributed
 
@@ -51,15 +53,19 @@ Consequences to keep in mind when touching `package.json`:
 
 - Almost everything `src/` imports at **runtime** (`mongoose`, `ioredis`,
   `graphql-type-json`, `winston`, `nest-winston`, `@nestjs/*`, `@apollo/server`) sits in
-  `devDependencies`. The peers are `@nestjs/common` ^11, `@nestjs/graphql` ^13, `@nestjs/apollo` ^13,
-  `@apollo/server` ^5, `graphql` ^16.11, `nest-winston` ^1.9.3, `winston` ^3, `graphql-type-json`, `ioredis`,
-  `mongoose` 7/8 and `reflect-metadata` 0.1/0.2, so it only fits consumers already on NestJS 11. At runtime `mongoose`,
+  `devDependencies`. The peers are `@nestjs/common` ^12, `@nestjs/graphql` ^14, `@nestjs/apollo` ^14,
+  `@apollo/server` ^5, `graphql` ^16.11, `nest-winston` ^2, `winston` ^3, `graphql-type-json`, `ioredis`,
+  `mongoose` 7/8 and `reflect-metadata` 0.1/0.2, so it only fits consumers already on NestJS 12. At runtime `mongoose`,
   `@nestjs/common`, `@nestjs/graphql`, `@apollo/server`, `winston`, `nest-winston`, `ioredis`,
   `graphql-type-json` and `reflect-metadata` resolve from `node_modules/mind-api-helpers/node_modules` (the
   nested copy installed by the `preinstall`); only `graphql` resolves from the consumer's root. That is why a
-  version bump here can silently disagree with what the services install.
+  version bump here can silently disagree with what the services install, and why the tsconfig `paths` entry
+  below exists.
 - `dependencies` holds only `axios`, `jsonwebtoken` and `jwk-to-pem` (exact pins). `axios` is imported by
   `error.helper.ts` and `graphql-auth-jwks.service.ts`.
+- `engines.node` is `>=24`: the library and its consuming services move to Node 24 together. NestJS 12 ships ESM
+  only and CommonJS consumers load it through Node's `require(esm)`. Running this package's tests needs Node >= 24.9
+  (Jest 30).
 - Releasing means bumping `version` in `package.json`, tagging the commit, and updating the `#tag` in
   each consuming repo. Branches are used as refs too (`#feature/to-error-helper`) while a change is
   being validated against a service.
@@ -126,8 +132,9 @@ leaves the resolvers with no context.
 
 Both share their options through `buildMindGqlOptions` (`graphql-options.builder.ts`); a service only adds its
 `context` (and the JWKS one its `path`), so a compatibility option is changed there, once. Required versions, the
-Express 5 path, the `'warn'` resolver validation, the `Date` type of `mindSessionExpiresIn` and the unpinned
-federation `@link` are documented in the README ("GraphQL" section), not repeated here.
+Express 5 path, the `'warn'` resolver validation, the `Date` type of `mindSessionExpiresIn`, the federation `@link`
+pinned in `MIND_FEDERATION_CONFIG` (`graphql-federation.config.ts`) and the consumer `paths` workaround for
+TypeScript 5.9 are documented in the README ("GraphQL" section), not repeated here.
 
 `mind-mongoose/helpers/query.helper.ts` translates the GraphQL input types from
 `mind-graphql/entities/query.entities.ts` into a Mongoose filter/options pair, so the two evolve
