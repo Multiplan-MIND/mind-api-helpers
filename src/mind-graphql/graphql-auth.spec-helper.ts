@@ -14,14 +14,33 @@ export type LoggerMock = { debug: jest.Mock; error: jest.Mock };
 
 export const createLoggerMock = (): LoggerMock => ({ debug: jest.fn(), error: jest.fn() });
 
-export const EMPTY_IDENTITY = { mindUserId: null, mindUserRoles: null, mindSessionExpiresIn: null };
+export const EMPTY_IDENTITY = {
+  mindUserId: null,
+  mindUserRoles: null,
+  mindSessionExpiresIn: null,
+  mindSessionId: null,
+  mindRequestInfo: expect.any(Object),
+};
+
+// Stand-in for `graphql`'s GraphQLError, loaded at call time by unauthenticatedError(); `graphql` is not installed
+// here (see above), so a spec that triggers a rejection mocks it with `jest.mock('graphql', ..., { virtual: true })`
+export class GraphQLErrorStub extends Error {
+  extensions: Record<string, unknown>;
+  constructor(message: string, options: { extensions?: Record<string, unknown> } = {}) {
+    super(message);
+    this.extensions = options.extensions ?? {};
+  }
+}
+
+export const UNAUTHENTICATED = { extensions: { code: 'UNAUTHENTICATED', http: { status: 401 } } };
 
 export const resolveContext = async (
   service: { createGqlOptions: () => Promise<{ context?: unknown }> },
   headers: Record<string, string>,
+  req: Record<string, unknown> = {},
 ) => {
   const options = await service.createGqlOptions();
-  return (options.context as (arg: unknown) => unknown)({ req: { headers } });
+  return (options.context as (arg: unknown) => unknown)({ req: { ...req, headers } });
 };
 
 // The exact @link the subgraph declared under NestJS 10 (@nestjs/graphql 12); mind-api-router's gateway 2.4.x
