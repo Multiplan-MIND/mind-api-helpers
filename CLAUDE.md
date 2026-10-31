@@ -14,21 +14,25 @@ it is re-exported there.
 
 ## Commands
 
-Node is pinned by `.nvmrc` (v20.20.2) and the package manager is **yarn** (v1 / classic).
+Node is pinned by `.nvmrc` (v24.22.1), `engines.node` is `>=24` (no upper bound) and the package manager is
+**yarn** (v1 / classic). Tests need Node >= 24.9: the NestJS 12 packages are ESM-only and Jest 30 can only
+`require()` them from that version on.
 
 ```bash
-nvm use                                   # required: the lockfile and the launch.json path assume v20
+nvm use                                   # required: Jest needs Node >= 24.9 (require(esm))
 yarn install                              # see the install cycle warning below
 yarn build                                # tsc -> dist/ (prebuild wipes dist via rimraf)
 yarn lint                                 # eslint (prettier runs as an eslint rule)
 yarn lint-autofix
-yarn test                                 # jest, config in jest.config.json, testRegex .spec.ts$
+yarn test                                 # node --experimental-vm-modules jest; config in jest.config.json
 yarn test src/mind-helpers               # one directory
 yarn test -t 'should preserve subclasses' # one test by name
 ```
 
-There is no watch/coverage script; use `yarn test --watch` / `--coverage` directly. `.vscode/launch.json`
-provides an "API Helpers - Jest" debug configuration (hardcoded to `$NVM_DIR/versions/node/v20.20.2`).
+There is no watch/coverage script; use `yarn test --watch` / `--coverage` directly. The `test` script runs Jest
+under `node --experimental-vm-modules`; without the flag every suite that imports `@nestjs/*` fails with
+`Must use import to load ES Module` (NestJS 12 ships ESM only). `.vscode/launch.json` provides an
+"API Helpers - Jest" debug configuration (nvm `runtimeVersion` 24, same flag in `runtimeArgs`).
 
 ## How this library is distributed
 
@@ -47,14 +51,24 @@ install cycle in `package.json` is for, and it is the reason the dependency layo
 
 Consequences to keep in mind when touching `package.json`:
 
-- Almost everything `src/` imports at **runtime** (`mongoose`, `ioredis`, `jsonwebtoken`, `jwk-to-pem`,
+- Almost everything `src/` imports at **runtime** (`mongoose`, `ioredis`,
   `graphql-type-json`, `winston`, `nest-winston`, `@nestjs/*`, `@apollo/server`) sits in
-  `devDependencies`; only `@nestjs/common` and `winston` are declared as peers. At runtime these
-  resolve from the **consumer's** `node_modules`, so a version bump here can silently disagree with
-  what the services install.
-- `axios` — imported by `error.helper.ts` and `graphql-auth-jwks.service.ts` — is not declared at all.
-  It only reaches `node_modules` because the single entry in `dependencies`, the deprecated
-  `@types/axios@0.14.0` stub, depends on `axios: "*"`.
+  `devDependencies`. The peers are `@nestjs/common` ^12, `@nestjs/graphql` ^14, `@nestjs/apollo` ^14,
+  `@apollo/server` ^5, `graphql` ^16.11, `nest-winston` ^2, `winston` ^3, `graphql-type-json`, `ioredis`,
+  `mongoose` ^9, `reflect-metadata` 0.1/0.2 and `@as-integrations/express5` ^1.1.2, so it only fits consumers
+  already on NestJS 12. At runtime `mongoose`,
+  `@nestjs/common`, `@nestjs/graphql`, `@apollo/server`, `winston`, `nest-winston`, `ioredis`,
+  `graphql-type-json` and `reflect-metadata` resolve from `node_modules/mind-api-helpers/node_modules` (the
+  nested copy installed by the `preinstall`); only `graphql` resolves from the consumer's root. That is why a
+  version bump here can silently disagree with what the services install, and why the tsconfig `paths` entry
+  below exists.
+- The peer `mongoose` is a single major (^9) on purpose: `getQuery` builds `ObjectId`s with the nested `mongoose`, and a
+  service on another bson major fails with `BSONVersionError`. A new Mongoose major needs a new major of this library.
+- `dependencies` holds only `axios`, `jsonwebtoken` and `jwk-to-pem` (exact pins). `axios` is imported by
+  `error.helper.ts` and `graphql-auth-jwks.service.ts`.
+- `engines.node` is `>=24`: the library and its consuming services move to Node 24 together. NestJS 12 ships ESM
+  only and CommonJS consumers load it through Node's `require(esm)`. Running this package's tests needs Node >= 24.9
+  (Jest 30).
 - Releasing means bumping `version` in `package.json`, tagging the commit, and updating the `#tag` in
   each consuming repo. Branches are used as refs too (`#feature/to-error-helper`) while a change is
   being validated against a service.
@@ -119,6 +133,12 @@ token against a JWKS document fetched from `process.env.JWKS_URL` and cached in 
 router, the JWKS variant at the edge. On failure both return `undefined` instead of throwing, which
 leaves the resolvers with no context.
 
+Both share their options through `buildMindGqlOptions` (`graphql-options.builder.ts`); a service only adds its
+`context` (and the JWKS one its `path`), so a compatibility option is changed there, once. Required versions, the
+Express 5 path, the `'warn'` resolver validation, the `Date` type of `mindSessionExpiresIn`, the federation `@link`
+pinned by `getMindFederationConfig()` (`graphql-federation.config.ts`) and the consumer `paths` workaround for
+TypeScript 5.9 are documented in the README ("GraphQL" section), not repeated here.
+
 `mind-mongoose/helpers/query.helper.ts` translates the GraphQL input types from
 `mind-graphql/entities/query.entities.ts` into a Mongoose filter/options pair, so the two evolve
 together: a new `OperationEnum` member needs a matching `case` in `getQuery`, and a new
@@ -133,14 +153,17 @@ the GraphQL defaults (`limit: 10`, sort by `updatedAt` desc) when they are.
   English; the README is the one document written in pt-BR.
 - Prettier config is duplicated in `.prettierrc` and inline in `.eslintrc.js` — edit both.
   Single quotes, 120 columns, trailing commas, 2 spaces.
-- `build` runs plain `tsc`, which picks up `tsconfig.json`, **not** `tsconfig.build.json`. Spec files
-  are therefore compiled into `dist/`, and `tsconfig.build.json` is effectively dead config.
-- The `lint` script's `src/**/*.ts` is expanded by bash with `globstar` off, i.e. it means `src/*/*.ts`.
-  `src/index.ts`, `src/mind-graphql/entities/` and `src/mind-mongoose/` are silently **not linted**.
-  Pass explicit paths to `eslint` when checking those.
+- `build` runs `tsc -p tsconfig.build.json`, which extends `tsconfig.json` and excludes `**/*spec.ts` and
+  `**/*spec-helper.ts`, so spec files and spec helpers are not compiled into `dist/`. `.eslintrc.js` ignores the
+  same files through `ignorePatterns`.
+- The `lint` scripts quote the glob (`"src/**/*.ts"`) so eslint, not the shell, expands it and lints all of `src/`.
 - `strictNullChecks` and `noImplicitAny` are off, so absent null checks are not compiler errors here
   even though they would be in the consuming services.
 - Running the tests writes real log files to `logs/` (the "with the real winston logger" suite is
   intentionally not mocked); `logs/` is gitignored.
+- Never add `graphql` to `devDependencies`. The consumer's `preinstall` installs this package's devDependencies
+  nested under `node_modules/mind-api-helpers/node_modules`, and a second `graphql` copy there makes the
+  `@Field(() => Int)` input types in `query.entities.ts` unresolvable in the consumer ("Cannot determine a GraphQL
+  input type"). Specs stub `graphql-type-json` instead.
 - `test/` exists but is empty — specs live next to the code as `*.spec.ts`.
 - Dependabot opens PRs against `develop`; `master` is the release branch that carries the tags.
