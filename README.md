@@ -13,25 +13,26 @@ Biblioteca interna de apoio dos serviços MIND, escrita em NestJS. Não é uma a
 | `mind-helpers`  | `MindError`, `toError()`, `jsonError()` e `isNullOrUndefined()`                                                            |
 | `mind-graphql`  | `GraphqlAuthJwksService` e `GraphqlAuthGatewayService` (Apollo Federation 2) e os _input types_ de consulta                |
 | `mind-mongoose` | `getQuery()` / `getOptions()`, que traduzem os _inputs_ GraphQL em filtro e opções do Mongoose                             |
+| `mind-observability`  | traces (`tracing/`) e métricas (`metrics/`) do OpenTelemetry sem código no serviço (`register`, `currentTraceId()`, `shutdownObservability()`), ver o [README do módulo](src/mind-observability/README.md) |
 
 Tudo o que é público passa pelo _barrel_ `src/index.ts`: um arquivo novo só fica visível para os
 serviços quando é reexportado lá.
 
 ## Idioma
 
-Este README é o único documento em português. **O código é em inglês** — identificadores, nomes de
-arquivos e diretórios, comentários e JSDoc, mensagens de log e de erro, descrições de teste, mensagens
-de commit, nomes de branch e títulos de pull request.
+Este README e o do módulo de observabilidade ([`src/mind-observability/README.md`](src/mind-observability/README.md)) são os únicos documentos em português. **O código é em inglês**: identificadores, nomes de arquivos e diretórios, mensagens de log e de erro, mensagens de commit, nomes de branch e títulos de pull request.
 
-O código em `src/` já está todo em inglês — mantenha assim.
+**Comentários e testes seguem uma única língua por módulo.** `mind-logger`, `mind-helpers`, `mind-graphql` e `mind-mongoose` comentam e descrevem os testes em inglês. `mind-observability` usa português do Brasil, com acentuação: comentários em blocos `/** */` que dizem só o porquê que o código não mostra, e arquivos de teste que abrem com o bloco `Testes executados:` listando cada `it`, com as descrições de `describe` e `it` em português. Ao mexer num arquivo, escreva na língua do módulo dele e traduza o que estiver na outra.
+
+## Documentação
+
+A documentação e os comentários descrevem a biblioteca como ela é, em termos atemporais. Não citam o plano, a revisão ou o pedido que motivou uma mudança, nem narram a transição ("passou a", "deixou de", "antes era", "não mais"), porque quem lê o repositório não tem acesso a esse contexto. Uma alternativa descartada aparece como propriedade de projeto ("X quebraria Y porque..."), não como desfecho de discussão. A história da mudança fica na descrição do pull request.
 
 ## Requisitos
 
-- **Node 24**, fixado no `.nvmrc` em `v24.22.1`; a configuração de debug do VS Code usa Node 24 via
-  `runtimeVersion`. Os testes precisam de Node 24.9 ou mais novo: os pacotes do NestJS 12 são só ESM e o Jest 30 só
-  consegue dar `require()` neles a partir dessa versão. O `engines` do `package.json` (`>=24`) vale para quem
-  consome a biblioteca; ver [Dependências e ambientes](#dependências-e-ambientes). A 2.x exige Node 24;
-  os serviços que ainda não migraram continuam na tag 1.x.
+- **Node 24.22 ou mais novo, dentro da major 24** (`engines` `^24.22.0`), fixado no `.nvmrc` em `v24.22.1`; a
+  configuração de debug do VS Code usa Node 24 via `runtimeVersion`. Serviço em Node anterior usa a linha 1.x, ver
+  [Versionamento e publicação](#versionamento-e-publicação).
 - **yarn 1.x** (clássico) — o `yarn.lock` do repositório é v1.
 - Acesso de leitura à organização `Multiplan-MIND` no GitHub, já que a instalação é feita pela URL do
   git, não por um registry.
@@ -216,9 +217,19 @@ GraphQLModule.forRootAsync<ApolloFederationDriverConfig>({
 });
 ```
 
+### Observabilidade (OpenTelemetry)
+
+O módulo `mind-observability` liga traces e métricas do OpenTelemetry sem nenhuma linha de código no serviço, CommonJS ou ES module. Basta carregar o `mind-api-helpers/observability` no comando que inicia a aplicação:
+
+```bash
+node -r mind-api-helpers/observability dist/main.js
+```
+
+Ativação com `.env`, como ligar e desligar por ambiente, o que é instrumentado, mascaramento de dado pessoal, AI SDK, encerramento e variáveis estão no [README do módulo](src/mind-observability/README.md).
+
 ## Variáveis de ambiente
 
-A biblioteca lê apenas três — quem as define é o serviço que a consome (ela não carrega `.env`):
+A biblioteca lê as três variáveis abaixo, e quem as define é o serviço que a consome (ela não carrega o `.env` para elas). As variáveis de observabilidade (`OTEL_*` e `TRACING_IGNORE_PATHS`) estão no [README do módulo](src/mind-observability/README.md#variáveis):
 
 | Variável   | Efeito                                                                    |
 | ---------- | ------------------------------------------------------------------------- |
@@ -253,20 +264,29 @@ Nunca adicione o `graphql` às `devDependencies`: uma segunda cópia dele dentro
 `node_modules/mind-api-helpers/node_modules` faz o serviço falhar com `Cannot determine a GraphQL input type`
 nos _input types_ de `query.entities.ts`.
 
-As `dependencies` têm só `axios` (usado por `error.helper.ts` e pelo serviço JWKS), `jsonwebtoken` e
-`jwk-to-pem`, com versões exatas.
+As `dependencies` têm `axios` (usado por `error.helper.ts` e pelo serviço JWKS), `jsonwebtoken`, `jwk-to-pem` e os
+pacotes do OpenTelemetry, todos com versões exatas, menos o `@opentelemetry/api` (ver as
+[versões da observabilidade](src/mind-observability/README.md#versões)).
 
-O `engines.node` é `>=24`: a biblioteca e os serviços que a consomem sobem juntos para o Node 24. O NestJS 12
-só publica ESM, e um serviço CommonJS o carrega pelo `require(esm)` do Node. Para rodar os testes desta
-biblioteca é preciso Node 24.9 ou mais novo (Jest 30).
+O `engines.node` é `^24.22.0`, a faixa da linha 2.x. O NestJS 12 só publica ESM, e um serviço CommonJS o carrega
+pelo `require(esm)` do Node.
 
 ## Versionamento e publicação
+
+A biblioteca tem duas linhas mantidas em paralelo, e o serviço escolhe a sua pela tag:
+
+| Linha | Node | O que traz |
+| --- | --- | --- |
+| 1.x | anteriores ao 24 (`>=20.20.2`) | NestJS 10, Mongoose 7 ou 8, sem observabilidade |
+| 2.x | 24, a partir da 24.22 (`^24.22.0`) | NestJS 12, Mongoose 9 e o `mind-observability` |
+
+Uma correção que valha para as duas linhas sai numa versão de cada uma. Uma major nova do Node pede uma major nova
+da biblioteca.
 
 Não há publicação em registry. Liberar uma versão é:
 
 1. subir o campo `version` do `package.json`;
-2. criar a tag correspondente no commit em `master` — o padrão atual é sem o prefixo `v` (`1.4.0`);
-   existe um `v1.1.0` antigo, que é exceção;
+2. criar a tag correspondente no commit em `master`, sem o prefixo `v` (`1.7.0`, `2.0.0`); o `v1.1.0` é exceção;
 3. atualizar o `#tag` no `package.json` de cada serviço que consome a biblioteca.
 
 `master` é a branch de release e carrega as tags; `develop` recebe a integração e é o alvo dos PRs do
