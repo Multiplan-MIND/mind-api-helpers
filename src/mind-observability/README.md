@@ -118,3 +118,29 @@ Se o SDK falhar ao iniciar, uma linha vai para o `stderr` e a aplicação segue 
 O `@opentelemetry/api` é declarado como faixa (`^1.10.0`), para o Yarn deduplicar com a cópia que outros pacotes do serviço trazem. O SDK só aceita cópias da API de mesma minor ou mais antigas, então a biblioteca avisa no `stderr`, na partida, quando encontra uma cópia mais nova na raiz do serviço ou dentro do `ai`: os spans e as métricas criados por ela seriam descartados sem erro. Nesse caso, alinhe as versões com um `resolutions` no serviço.
 
 As demais dependências do OpenTelemetry são fixas na linha 0.300 do SDK (`sdk-node` 0.300.0, `auto-instrumentations-node` 0.82.0) e sobem juntas.
+
+## Arquivos do módulo
+
+A raiz do módulo guarda o que serve aos dois sinais, `tracing/` o que produz ou lê spans e `metrics/` o que produz só métricas.
+
+| Arquivo | O que é e para que serve |
+| --- | --- |
+| `observability.js` (raiz do pacote) | atalho que só carrega o `register` compilado, para o serviço usar `-r mind-api-helpers/observability` sem citar o `dist/` |
+| `register.ts` | ponto de entrada carregado pelo `-r`; apenas chama `startObservability()` |
+| `start-observability.ts` | o switch: decide pelas variáveis se a telemetria liga e só então carrega o SDK, para um serviço desligado não pagar nada |
+| `observability-sdk.ts` | monta e inicia o `NodeSDK` com recurso, instrumentações, integrações do AI SDK, logger de erros de exportação e encerramento |
+| `esm-loader-hook.ts` | registra o hook síncrono do `import-in-the-middle`, que permite instrumentar módulos carregados por `import` |
+| `instrumentations.ts` | define quais instrumentações do pacote oficial ficam ligadas e aplica os padrões da biblioteca |
+| `observability-resource.ts` | monta o recurso (`service.name`, `service.version`, contêiner, host, processo) e a ordem dos detectores |
+| `observability-shutdown.ts` | descarrega spans e métricas pendentes no `SIGTERM`, `SIGINT` e `beforeExit`; exporta `shutdownObservability()` |
+| `export-error-logger.ts` | escreve no `stderr` as falhas de exportação, no máximo uma linha a cada 5 minutos, quando `OTEL_LOG_LEVEL` não está definida |
+| `api-copies.ts` | avisa na partida quando o serviço tem uma cópia mais nova do `@opentelemetry/api`, que perderia spans e métricas sem erro |
+| `ai-sdk-telemetry.ts` | formatos dos eventos do AI SDK, mapeamento de provedor e operação, versão das convenções GenAI e registro global das integrações |
+| `ai-sdk-calls.ts` | estado das chamadas do AI SDK em andamento, compartilhado por tracing e métricas, com expiração das que nunca terminam |
+| `tracing/tracing-instrumentations.ts` | opções de cada instrumentação que produz spans (Express, Redis, MongoDB, GraphQL, HTTP) |
+| `tracing/personal-data.ts` | mascaramento de telefone, CPF e e-mail nos atributos de URL e de consulta, e serialização dos comandos Redis |
+| `tracing/ignore-paths.ts` | rotas que não geram trace: as de saúde e as listadas em `TRACING_IGNORE_PATHS` |
+| `tracing/ai-sdk-tracing.ts` | integração do AI SDK que transforma cada chamada em spans GenAI |
+| `tracing/active-span.ts` | leitura dos ids do span ativo e marcação `mind.log.warn`/`mind.log.error`, usadas pelo `MindLoggerService` |
+| `metrics/metrics-instrumentations.ts` | opções das instrumentações que só produzem métricas, com a `host-metrics` restrita ao processo |
+| `metrics/ai-sdk-metrics.ts` | integração do AI SDK que registra as métricas GenAI de tokens e de duração |
