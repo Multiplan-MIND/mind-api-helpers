@@ -8,10 +8,15 @@
   },
   "private": true,
   "main": "dist/index.js",
+  "bin": {
+    "mind-node-guard": "node-version-guard.js",
+    "mind-observability": "observability.js"
+  },
   "types": "dist/index.d.ts",
   "files": [
     "/dist",
-    "/observability.js"
+    "/observability.js",
+    "/node-version-guard.js"
   ],
   "scripts": {
     "lint": "eslint \"src/**/*.ts\"",
@@ -32,7 +37,8 @@
     "@opentelemetry/sdk-node": "0.300.0",
     "axios": "1.6.0",
     "jsonwebtoken": "9.0.2",
-    "jwk-to-pem": "2.0.5"
+    "jwk-to-pem": "2.0.5",
+    "semver": "7.8.5"
   },
   "devDependencies": {
     "@apollo/server": "5.5.1",
@@ -47,6 +53,7 @@
     "@types/jsonwebtoken": "9.0.10",
     "@types/jwk-to-pem": "2.0.3",
     "@types/node": "24.19.2",
+    "@types/semver": "7.7.1",
     "@typescript-eslint/eslint-plugin": "8.72.0",
     "@typescript-eslint/parser": "8.72.0",
     "eslint": "8.57.1",
