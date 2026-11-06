@@ -172,6 +172,8 @@ Each script lives in its own folder, `src/mind-scripts/<script>/`, with its code
 
 `fix-comments/` backs the `mind-fix-comments` command (root shim `fix-comments.js`): `comment-conversion.ts` is the pure line-by-line conversion, which skips the lines `line-context.ts` finds starting inside a block comment or a template literal (the scanner tells regex literals from division by the preceding character or keyword, and once it loses track, on a string or regex left open at the end of a line or an unmatched `}`, conversion stays off for the rest of the file), `fix-comments.ts` walks `process.cwd()` with the native `fs.globSync` (no `glob` dependency; like `glob`, it skips dotfiles) and rewrites the files, and `fix-comments-command.ts` prints the summary and sets exit code 1 when a file fails. The spec for `fix-comments.ts` uses a real temporary directory; a directory named `*.ts` is the read failure, which holds even when the tests run as root.
 
+`check-coverage/` backs the `mind-check-coverage` command (root shim `check-coverage.js`), the pipeline gate on line coverage: `coverage-evaluation.ts` holds the rule (90% minimum; with develop below it the floor is develop itself, otherwise the minimum), and `check-coverage.ts` reads the istanbul `coverage-summary.json` files, refuses a non-numeric `total.lines.pct` (istanbul writes `"Unknown"`, which would never compare below the floor), and returns the exit code. Below version 1.0 of the service's `package.json` a failure is informational unless `--enforce-before-v1` is passed; a missing or invalid version enforces the gate.
+
 ## Conventions and gotchas
 
 - **Code is English** (identifiers, file names, branch names, log/error strings), per the "Idioma"

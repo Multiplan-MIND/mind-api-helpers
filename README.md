@@ -238,6 +238,7 @@ Cada script fica numa pasta própria em `src/mind-scripts/`, com um README que d
 | --- | --- |
 | [Guard de versão do Node](src/mind-scripts/node-version-guard/README.md) | encerra a aplicação com uma mensagem clara quando o Node está fora do `engines.node` do serviço; roda por import, `-r` ou pelo comando `mind-node-guard` |
 | [Conversão de comentários](src/mind-scripts/fix-comments/README.md) | converte em bloco `/** */` os comentários `//` de linha inteira do serviço; roda pelo comando `mind-fix-comments` |
+| [Gate de cobertura](src/mind-scripts/check-coverage/README.md) | compara a cobertura de linhas do PR com a do develop e falha o build abaixo do piso; roda pelo comando `mind-check-coverage` |
 
 ## Variáveis de ambiente
 
