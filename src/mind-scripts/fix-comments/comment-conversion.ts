@@ -5,7 +5,7 @@ import {
   SINGLE_LINE_COMMENT_REGEX,
   SPACE_LIKE_CHAR_CODES,
 } from './constants';
-import { advanceLineContext, createLineContext, startsInsideCommentOrTemplate } from './line-context';
+import { advanceLineContext, canConvertLine, createLineContext } from './line-context';
 
 export interface CommentConversion {
   content: string;
@@ -104,7 +104,7 @@ export function convertComments(content: string): CommentConversion {
   let index = 0;
 
   while (index < lines.length) {
-    const matched = startsInsideCommentOrTemplate(context) ? null : matchComment(lines[index]);
+    const matched = canConvertLine(context) ? matchComment(lines[index]) : null;
 
     if (!matched) {
       advanceLineContext(context, lines[index]);
