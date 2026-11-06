@@ -15,11 +15,11 @@ As três formas executam o mesmo arquivo, e cabe ao serviço escolher uma:
 
 | Forma | Onde fica | Quando usar |
 | --- | --- | --- |
-| Import | primeira linha do `main.ts`: `import 'mind-api-helpers/node-version-guard';` | o guard vai junto com o código e roda em qualquer comando que suba a aplicação |
+| Import | primeira linha do `main.ts`: `import 'mind-api-helpers/node-version-guard';`, ou `import 'mind-api-helpers/node-version-guard.js';` em serviço ES module | o guard vai junto com o código e roda em qualquer comando que suba a aplicação |
 | `-r` | comando de start: `node -r mind-api-helpers/node-version-guard -r mind-api-helpers/observability dist/main.js` | o guard fica fora do código; precisa vir antes da observabilidade |
 | Comando | passo separado, como `mind-node-guard && node dist/main.js` num shell, no CI ou no Dockerfile | a conferência roda antes da aplicação, com o `node` do `PATH`, e termina com código 0 quando a versão atende |
 
-Pelo import e pelo `-r`, o guard precisa rodar antes de qualquer import do NestJS. Ele não passa pelo _barrel_ da biblioteca, que carrega o NestJS ao ser importado. Num script do `package.json` rodado pelo yarn 1.x, o próprio yarn recusa a execução quando o Node está fora do `engines` do projeto, com a mensagem dele, antes de o comando rodar.
+Em serviço ES module (`"type": "module"`), o import leva a extensão `.js`, porque o resolvedor ESM do Node não a completa e, sem ela, a partida falha com `ERR_MODULE_NOT_FOUND`. Pelo import e pelo `-r`, o guard precisa rodar antes de qualquer import do NestJS. Ele não passa pelo _barrel_ da biblioteca, que carrega o NestJS ao ser importado. Num script do `package.json` rodado pelo yarn 1.x, o próprio yarn recusa a execução quando o Node está fora do `engines` do projeto, com a mensagem dele, antes de o comando rodar.
 
 ## Comportamento
 
