@@ -172,7 +172,7 @@ Each script lives in its own folder, `src/mind-scripts/<script>/`, with its code
 
 ## Conventions and gotchas
 
-- **Code is English** (identifiers, file names, commit messages, branch names, log/error strings), per the "Idioma"
+- **Code is English** (identifiers, file names, branch names, log/error strings), per the "Idioma"
   section of the README; the READMEs (the main one, `src/mind-observability/README.md` and the one in each
   `src/mind-scripts/<script>/` folder) are the only documents written in pt-BR.
 - **Comments and test descriptions use one language per module.** `mind-logger`, `mind-helpers`, `mind-graphql` and

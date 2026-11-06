@@ -21,7 +21,7 @@ serviços quando é reexportado lá.
 
 ## Idioma
 
-Este README, o do módulo de observabilidade ([`src/mind-observability/README.md`](src/mind-observability/README.md)) e os de cada script em `src/mind-scripts/` são os únicos documentos em português. **O código é em inglês**: identificadores, nomes de arquivos e diretórios, mensagens de log e de erro, mensagens de commit, nomes de branch e títulos de pull request.
+Este README, o do módulo de observabilidade ([`src/mind-observability/README.md`](src/mind-observability/README.md)) e os de cada script em `src/mind-scripts/` são os únicos documentos em português. **O código é em inglês**: identificadores, nomes de arquivos e diretórios, mensagens de log e de erro, nomes de branch e títulos de pull request.
 
 **Comentários e testes seguem uma única língua por módulo.** `mind-logger`, `mind-helpers`, `mind-graphql` e `mind-mongoose` comentam e descrevem os testes em inglês. `mind-observability` e `mind-scripts` usam português do Brasil, com acentuação: comentários em blocos `/** */` que dizem só o porquê que o código não mostra, e arquivos de teste que abrem com o bloco `Testes executados:` listando cada `it`, com as descrições de `describe` e `it` em português. Ao mexer num arquivo, escreva na língua do módulo dele e traduza o que estiver na outra.
 
