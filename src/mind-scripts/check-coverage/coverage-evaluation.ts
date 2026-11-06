@@ -1,52 +1,61 @@
-import { MIN_COVERAGE_PCT } from './constants';
+import { COVERAGE_METRICS, CoverageMetric, CoveragePercentages } from './constants';
+
+const METRIC_LABEL_WIDTH = 10;
+
+export function configuredMetrics(thresholds: CoveragePercentages): CoverageMetric[] {
+  return COVERAGE_METRICS.filter((metric) => thresholds[metric] !== undefined);
+}
 
 function formatPct(pct: number): string {
   return `${pct.toFixed(2)}%`;
 }
 
-function evaluateAgainstMinimum(prPct: number): boolean {
-  if (prPct < MIN_COVERAGE_PCT) {
-    console.error(`Failed: below the minimum (${formatPct(prPct)} < ${MIN_COVERAGE_PCT}%)`);
-    return false;
-  }
-
-  console.log(`Passed (${formatPct(prPct)} >= ${MIN_COVERAGE_PCT}%)`);
-  return true;
+function report(passed: boolean, message: string): void {
+  if (passed) console.log(message);
+  else console.error(message);
 }
 
 /**
- * Com o develop abaixo do mínimo, o piso é o próprio develop, para que a cobertura suba aos poucos sem regredir; com
+ * Com o baseline abaixo do mínimo, o piso é o próprio baseline, para que a cobertura suba aos poucos sem regredir; com
  * ele no mínimo ou acima, o piso é o mínimo, e o PR pode cair até ele.
  */
-function evaluateAgainstDevelop(prPct: number, devPct: number): boolean {
-  const developReachedMinimum = devPct >= MIN_COVERAGE_PCT;
-  const floor = Math.min(devPct, MIN_COVERAGE_PCT);
+function evaluateMetric(metric: CoverageMetric, minimum: number, prPct: number, baselinePct?: number): boolean {
+  const label = `${metric.padEnd(METRIC_LABEL_WIDTH)}: PR ${formatPct(prPct)}`;
 
-  if (developReachedMinimum) console.log(`Mode: develop >= ${MIN_COVERAGE_PCT}%, floor fixed at ${MIN_COVERAGE_PCT}%`);
-  else console.log(`Mode: develop < ${MIN_COVERAGE_PCT}%, floor = develop (${formatPct(devPct)})`);
-
-  if (prPct < floor) {
-    if (developReachedMinimum) {
-      console.error(`Failed: coverage fell below ${MIN_COVERAGE_PCT}% (${formatPct(prPct)} < ${MIN_COVERAGE_PCT}%)`);
-    } else {
-      console.error(`Failed: regression against develop (${formatPct(prPct)} < ${formatPct(devPct)})`);
-    }
-    return false;
+  if (baselinePct === undefined) {
+    const passed = prPct >= minimum;
+    report(passed, `${label} | minimum ${formatPct(minimum)} | ${passed ? 'passed' : 'failed: below the minimum'}`);
+    return passed;
   }
 
-  const delta = prPct - devPct;
-  console.log(`Passed (${delta >= 0 ? '+' : ''}${formatPct(delta)} vs develop, floor: ${formatPct(floor)})`);
-  return true;
+  const floor = Math.min(baselinePct, minimum);
+  const passed = prPct >= floor;
+  const delta = prPct - baselinePct;
+  const failure = baselinePct < minimum ? 'regression against baseline' : 'below the minimum';
+
+  const comparison = `(${delta >= 0 ? '+' : ''}${formatPct(delta)}) | baseline ${formatPct(baselinePct)}`;
+  const result = passed ? 'passed' : `failed: ${failure}`;
+
+  report(passed, `${label} ${comparison} | floor ${formatPct(floor)} | ${result}`);
+  return passed;
 }
 
-export function evaluateCoverage(prPct: number, devPct?: number): boolean {
-  console.log(`PR coverage     : ${formatPct(prPct)} (lines)`);
+/** Cada métrica configurada é avaliada e relatada, mesmo depois de uma reprovar, para o relatório sair completo. */
+export function evaluateCoverage(
+  thresholds: CoveragePercentages,
+  prPercentages: CoveragePercentages,
+  baselinePercentages?: CoveragePercentages,
+): boolean {
+  if (!baselinePercentages) console.log('Warning: baseline summary not found, checking only the minimums');
 
-  if (devPct === undefined) {
-    console.log('Warning: develop summary not found, checking only the absolute minimum');
-    return evaluateAgainstMinimum(prPct);
-  }
+  const results = configuredMetrics(thresholds).map((metric) => {
+    const baselinePct = baselinePercentages?.[metric];
+    if (baselinePercentages && baselinePct === undefined) {
+      console.log(`Warning: baseline summary has no ${metric}, checking it only against the minimum`);
+    }
 
-  console.log(`develop coverage: ${formatPct(devPct)} (lines)`);
-  return evaluateAgainstDevelop(prPct, devPct);
+    return evaluateMetric(metric, thresholds[metric], prPercentages[metric], baselinePct);
+  });
+
+  return results.every(Boolean);
 }

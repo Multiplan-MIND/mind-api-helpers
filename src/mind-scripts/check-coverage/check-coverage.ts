@@ -1,39 +1,50 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { major, valid } from 'semver';
 
-import { ENFORCE_BEFORE_V1_FLAG, ENFORCED_MAJOR_VERSION, SEPARATOR, USAGE } from './constants';
-import { evaluateCoverage } from './coverage-evaluation';
+import {
+  CoverageMetric,
+  CoveragePercentages,
+  ENFORCE_BEFORE_V1_FLAG,
+  ENFORCED_MAJOR_VERSION,
+  SEPARATOR,
+} from './constants';
+import { configuredMetrics, evaluateCoverage } from './coverage-evaluation';
+import { CoverageOptions, resolveCoverageOptions } from './coverage-options';
+import { readJsonFile } from './read-json-file';
 
-interface CoverageArguments {
-  prSummaryPath: string;
-  developSummaryPath?: string;
-  enforceBeforeV1: boolean;
+interface CoverageSummary {
+  total?: Partial<Record<CoverageMetric, { pct?: unknown }>>;
 }
 
-function parseArguments(commandArguments: string[]): CoverageArguments | undefined {
-  const enforceBeforeV1 = commandArguments.includes(ENFORCE_BEFORE_V1_FLAG);
-  const [prSummaryPath, developSummaryPath] = commandArguments.filter(
-    (argument) => argument !== ENFORCE_BEFORE_V1_FLAG,
-  );
+/** Só as métricas com percentual numérico; o istanbul grava `"Unknown"` quando não há arquivo nenhum coberto. */
+function readNumericPercentages(summaryPath: string, metrics: CoverageMetric[]): CoveragePercentages {
+  const total = (readJsonFile(summaryPath) as CoverageSummary)?.total;
+  const percentages: CoveragePercentages = {};
 
-  return prSummaryPath ? { prSummaryPath, developSummaryPath, enforceBeforeV1 } : undefined;
+  for (const metric of metrics) {
+    const pct = total?.[metric]?.pct;
+    if (typeof pct === 'number') percentages[metric] = pct;
+  }
+
+  return percentages;
 }
 
 /**
- * O istanbul grava `"Unknown"` no `pct` quando não há arquivo nenhum coberto. Comparado com o piso, um valor que não é
- * número nunca fica abaixo dele e aprovaria o PR, então o summary sem número é recusado.
+ * No PR, a métrica sem número é recusada: comparado com o piso, um valor que não é número nunca fica abaixo dele e
+ * aprovaria o PR. No baseline ela só deixa de ser comparada, como quando o baseline inteiro falta.
  */
-function readLinesPct(summaryPath: string): number {
-  const pct = JSON.parse(readFileSync(summaryPath, 'utf8'))?.total?.lines?.pct;
-  if (typeof pct !== 'number') throw new Error(`${summaryPath} has no numeric total.lines.pct`);
+function readPrPercentages(summaryPath: string, metrics: CoverageMetric[]): CoveragePercentages {
+  const percentages = readNumericPercentages(summaryPath, metrics);
+  const missingMetric = metrics.find((metric) => percentages[metric] === undefined);
+  if (missingMetric) throw new Error(`${summaryPath} has no numeric total.${missingMetric}.pct`);
 
-  return pct;
+  return percentages;
 }
 
 function readProjectVersion(projectDirectory: string): string | undefined {
   try {
-    const version = JSON.parse(readFileSync(join(projectDirectory, 'package.json'), 'utf8'))?.version;
+    const version = (readJsonFile(join(projectDirectory, 'package.json')) as { version?: unknown })?.version;
     return typeof version === 'string' ? valid(version) ?? undefined : undefined;
   } catch {
     return undefined;
@@ -53,35 +64,35 @@ function isGateEnforced(projectDirectory: string, enforceBeforeV1: boolean): boo
   return false;
 }
 
+/** O summary do baseline é opcional porque a pipeline o baixa e ele pode ainda não existir. */
+function runCoverageGate(options: CoverageOptions, projectDirectory: string): number {
+  const { prSummaryPath, baselineSummaryPath, thresholds, enforceBeforeV1 } = options;
+  if (!existsSync(prSummaryPath)) throw new Error(`File not found: ${prSummaryPath}`);
+
+  const metrics = configuredMetrics(thresholds);
+  const prPercentages = readPrPercentages(prSummaryPath, metrics);
+  const baselinePercentages =
+    baselineSummaryPath && existsSync(baselineSummaryPath)
+      ? readNumericPercentages(baselineSummaryPath, metrics)
+      : undefined;
+
+  console.log(`\n${SEPARATOR}\n       Test coverage check\n${SEPARATOR}\n`);
+  const approved = evaluateCoverage(thresholds, prPercentages, baselinePercentages);
+  const enforced = isGateEnforced(projectDirectory, enforceBeforeV1);
+  console.log(`\n${SEPARATOR}\n`);
+
+  return approved || !enforced ? 0 : 1;
+}
+
 /**
- * Compara a cobertura de linhas do PR com a do develop, pelos `coverage-summary.json` do istanbul, e devolve o código
- * de saída do comando. O summary do develop é opcional porque a pipeline o baixa e ele pode ainda não existir.
+ * Compara a cobertura do PR com a do baseline, pelos `coverage-summary.json` do istanbul, nas métricas que têm mínimo
+ * configurado, e devolve o código de saída do comando.
  */
 export function checkCoverage(commandArguments: string[], projectDirectory: string): number {
-  const coverageArguments = parseArguments(commandArguments);
-  if (!coverageArguments) {
-    console.error(USAGE);
-    return 1;
-  }
-
-  const { prSummaryPath, developSummaryPath, enforceBeforeV1 } = coverageArguments;
-  if (!existsSync(prSummaryPath)) {
-    console.error(`File not found: ${prSummaryPath}`);
-    return 1;
-  }
-
   try {
-    const prPct = readLinesPct(prSummaryPath);
-    const devPct = developSummaryPath && existsSync(developSummaryPath) ? readLinesPct(developSummaryPath) : undefined;
-
-    console.log(`\n${SEPARATOR}\n       Test coverage check\n${SEPARATOR}\n`);
-    const approved = evaluateCoverage(prPct, devPct);
-    const enforced = isGateEnforced(projectDirectory, enforceBeforeV1);
-    console.log(`\n${SEPARATOR}\n`);
-
-    return approved || !enforced ? 0 : 1;
+    return runCoverageGate(resolveCoverageOptions(commandArguments, projectDirectory), projectDirectory);
   } catch (error) {
-    console.error(`Failed to read the coverage summary: ${(error as Error).message}`);
+    console.error((error as Error).message);
     return 1;
   }
 }
