@@ -9,7 +9,8 @@
   "private": true,
   "main": "dist/index.js",
   "bin": {
-    "mind-node-guard": "node-version-guard.js"
+    "mind-node-guard": "node-version-guard.js",
+    "mind-observability": "observability.js"
   },
   "types": "dist/index.d.ts",
   "files": [

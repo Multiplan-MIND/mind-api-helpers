@@ -226,6 +226,8 @@ O módulo `mind-observability` liga traces e métricas do OpenTelemetry sem nenh
 node -r mind-api-helpers/observability dist/main.js
 ```
 
+O comando `mind-observability`, instalado pelo pacote, faz o mesmo: `mind-observability dist/main.js`.
+
 Ativação com `.env`, como ligar e desligar por ambiente, o que é instrumentado, mascaramento de dado pessoal, AI SDK, encerramento e variáveis estão no [README do módulo](src/mind-observability/README.md).
 
 ### Scripts (`mind-scripts`)
