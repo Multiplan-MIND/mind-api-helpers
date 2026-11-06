@@ -6,8 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A private, internal NestJS support library (`mind-api-helpers`) shared by the `mind-api-*` /
 `multi-api-*` services. It ships no application, no `main.ts` and no HTTP server — only the logger,
-the GraphQL bootstrap services, the error helpers, the Mongoose query builder and the OpenTelemetry
-entry point that those services import.
+the GraphQL bootstrap services, the error helpers, the Mongoose query builder, the OpenTelemetry
+entry point and the Node version guard that those services import.
 
 Everything public goes through the barrel `src/index.ts`. A new file is invisible to consumers until
 it is re-exported there.
@@ -63,7 +63,7 @@ Consequences to keep in mind when touching `package.json`:
   below exists.
 - The peer `mongoose` is a single major (^9) on purpose: `getQuery` builds `ObjectId`s with the nested `mongoose`, and a
   service on another bson major fails with `BSONVersionError`. A new Mongoose major needs a new major of this library.
-- `dependencies` holds `axios`, `jsonwebtoken`, `jwk-to-pem` and the OpenTelemetry packages (exact pins, except the
+- `dependencies` holds `axios`, `jsonwebtoken`, `jwk-to-pem`, `semver` (for the Node version guard) and the OpenTelemetry packages (exact pins, except the
   `@opentelemetry/api` range). `axios` is imported by `error.helper.ts` and `graphql-auth-jwks.service.ts`.
 - **Two release lines live in parallel.** 1.x serves services on Node older than 24 (NestJS 10, Mongoose 7/8, no
   observability); 2.x serves Node 24 from 24.22 on (`engines.node` `^24.22.0`, NestJS 12, Mongoose 9,
@@ -163,13 +163,19 @@ The module is split by concern. The root holds what serves both signals: `regist
 - **Versions:** `@opentelemetry/api` is a range (`^1.10.0`) on purpose; everything else is pinned on the SDK 0.300 line (`sdk-node` 0.300.0, `auto-instrumentations-node` 0.82.0, `instrumentation` 0.300.0, `instrumentation-express` 0.72.0, `resources` 3.0.0, `resource-detector-container` 0.9.0). Bump them together and keep `auto-instrumentations-node` on the same `sdk-node` line.
 - **Tests:** the unit specs mock `NodeSDK` and `getNodeAutoInstrumentations`; the tracing specs use the real `TracerProvider` with an `InMemorySpanExporter` (`@opentelemetry/sdk-trace` 3.0.0) and the `AsyncLocalStorageContextManager`. `register.e2e.spec.ts` compiles `src/` into `node_modules/.cache/mind-observability-e2e`, starts the services in `__fixtures__/service` (`server.cjs` and `server.mjs`) with `-r register` against an in-memory OTLP/JSON receiver, and checks spans, masking, metrics and the resource, that `ioredis` loaded with `import` is patched (`esm-patched=true`; `node:http` would be patched even without the hook), plus that nothing loads when `OTEL_SDK_DISABLED=true`.
 
+### `mind-scripts` — scripts for the services
+
+Each script lives in its own folder, `src/mind-scripts/<script>/`, with its code, its specs and a short pt-BR `README.md` saying what the script is for and how to use it; the main README only lists the scripts and links to those files. Keep new scripts on that layout.
+
+`node-version-guard/node-version-guard.ts` acts on import: it reads `engines.node` from the nearest `package.json` above `process.cwd()`, checks `process.version` with `semver.satisfies` and, outside the range, writes to stderr with `writeSync` (an async write would be lost on the `process.exit(1)` right after) and exits. A missing `package.json` or an invalid range also exits, so a broken setup cannot switch the guard off silently. Services reach it through the root `node-version-guard.js` shim in three ways, their choice: `import 'mind-api-helpers/node-version-guard'` on the first line of `main.ts`, `node -r mind-api-helpers/node-version-guard`, or the `mind-node-guard` command from `bin`. The `bin` entry points at the shim, which carries the shebang, and not at `dist/`, because yarn links the commands before the `postinstall` builds `dist/`. It is meant for the application only; the CLI scripts of this module do not import it. Like `register`, it is not exported from `src/index.ts`: the barrel loads NestJS, which is what fails on an unsupported Node. Keep its imports to `node:*` and `semver`, which load on any Node the guard has to reject. The spec swaps `process.version`, `process.versions` and `execPath` through their property descriptors, mocks `node:fs` with an in-memory file map and reloads the module with `jest.isolateModules`.
+
 ## Conventions and gotchas
 
 - **Code is English** (identifiers, file names, commit messages, branch names, log/error strings), per the "Idioma"
-  section of the README; the READMEs (the main one and `src/mind-observability/README.md`) are the only documents
-  written in pt-BR.
+  section of the README; the READMEs (the main one, `src/mind-observability/README.md` and the one in each
+  `src/mind-scripts/<script>/` folder) are the only documents written in pt-BR.
 - **Comments and test descriptions use one language per module.** `mind-logger`, `mind-helpers`, `mind-graphql` and
-  `mind-mongoose` use English. `mind-observability` uses Brazilian Portuguese, with accents: every explanatory comment
+  `mind-mongoose` use English. `mind-observability` and `mind-scripts` use Brazilian Portuguese, with accents: every explanatory comment
   in `.ts`, `.js`, `.cjs` and `.mjs` is a `/** */` block, never `//`; it states only the non-obvious why, briefly; no
   full JSDoc with `@param`/`@returns`. Its spec files open with a `Testes executados:` block listing every `it`
   (nested like the `describe`s), then the imports, then `/** Configuração */`, `/** Fixtures */`,

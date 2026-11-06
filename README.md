@@ -14,15 +14,16 @@ Biblioteca interna de apoio dos serviços MIND, escrita em NestJS. Não é uma a
 | `mind-graphql`  | `GraphqlAuthJwksService` e `GraphqlAuthGatewayService` (Apollo Federation 2) e os _input types_ de consulta                |
 | `mind-mongoose` | `getQuery()` / `getOptions()`, que traduzem os _inputs_ GraphQL em filtro e opções do Mongoose                             |
 | `mind-observability`  | traces (`tracing/`) e métricas (`metrics/`) do OpenTelemetry sem código no serviço (`register`, `currentTraceId()`, `shutdownObservability()`), ver o [README do módulo](src/mind-observability/README.md) |
+| `mind-scripts`  | scripts para os serviços, cada um com pasta e README próprios, ver [Scripts](#scripts-mind-scripts) |
 
 Tudo o que é público passa pelo _barrel_ `src/index.ts`: um arquivo novo só fica visível para os
 serviços quando é reexportado lá.
 
 ## Idioma
 
-Este README e o do módulo de observabilidade ([`src/mind-observability/README.md`](src/mind-observability/README.md)) são os únicos documentos em português. **O código é em inglês**: identificadores, nomes de arquivos e diretórios, mensagens de log e de erro, mensagens de commit, nomes de branch e títulos de pull request.
+Este README, o do módulo de observabilidade ([`src/mind-observability/README.md`](src/mind-observability/README.md)) e os de cada script em `src/mind-scripts/` são os únicos documentos em português. **O código é em inglês**: identificadores, nomes de arquivos e diretórios, mensagens de log e de erro, mensagens de commit, nomes de branch e títulos de pull request.
 
-**Comentários e testes seguem uma única língua por módulo.** `mind-logger`, `mind-helpers`, `mind-graphql` e `mind-mongoose` comentam e descrevem os testes em inglês. `mind-observability` usa português do Brasil, com acentuação: comentários em blocos `/** */` que dizem só o porquê que o código não mostra, e arquivos de teste que abrem com o bloco `Testes executados:` listando cada `it`, com as descrições de `describe` e `it` em português. Ao mexer num arquivo, escreva na língua do módulo dele e traduza o que estiver na outra.
+**Comentários e testes seguem uma única língua por módulo.** `mind-logger`, `mind-helpers`, `mind-graphql` e `mind-mongoose` comentam e descrevem os testes em inglês. `mind-observability` e `mind-scripts` usam português do Brasil, com acentuação: comentários em blocos `/** */` que dizem só o porquê que o código não mostra, e arquivos de teste que abrem com o bloco `Testes executados:` listando cada `it`, com as descrições de `describe` e `it` em português. Ao mexer num arquivo, escreva na língua do módulo dele e traduza o que estiver na outra.
 
 ## Documentação
 
@@ -227,6 +228,14 @@ node -r mind-api-helpers/observability dist/main.js
 
 Ativação com `.env`, como ligar e desligar por ambiente, o que é instrumentado, mascaramento de dado pessoal, AI SDK, encerramento e variáveis estão no [README do módulo](src/mind-observability/README.md).
 
+### Scripts (`mind-scripts`)
+
+Cada script fica numa pasta própria em `src/mind-scripts/`, com um README que diz para que serve e como usar:
+
+| Script | Para que serve |
+| --- | --- |
+| [Guard de versão do Node](src/mind-scripts/node-version-guard/README.md) | encerra a aplicação com uma mensagem clara quando o Node está fora do `engines.node` do serviço; roda por import, `-r` ou pelo comando `mind-node-guard` |
+
 ## Variáveis de ambiente
 
 A biblioteca lê as três variáveis abaixo, e quem as define é o serviço que a consome (ela não carrega o `.env` para elas). As variáveis de observabilidade (`OTEL_*` e `TRACING_IGNORE_PATHS`) estão no [README do módulo](src/mind-observability/README.md#variáveis):
@@ -264,7 +273,7 @@ Nunca adicione o `graphql` às `devDependencies`: uma segunda cópia dele dentro
 `node_modules/mind-api-helpers/node_modules` faz o serviço falhar com `Cannot determine a GraphQL input type`
 nos _input types_ de `query.entities.ts`.
 
-As `dependencies` têm `axios` (usado por `error.helper.ts` e pelo serviço JWKS), `jsonwebtoken`, `jwk-to-pem` e os
+As `dependencies` têm `axios` (usado por `error.helper.ts` e pelo serviço JWKS), `jsonwebtoken`, `jwk-to-pem`, `semver` (usado pelo guard de versão do Node) e os
 pacotes do OpenTelemetry, todos com versões exatas, menos o `@opentelemetry/api` (ver as
 [versões da observabilidade](src/mind-observability/README.md#versões)).
 
