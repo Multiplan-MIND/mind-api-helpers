@@ -237,6 +237,7 @@ Cada script fica numa pasta própria em `src/mind-scripts/`, com um README que d
 | Script | Para que serve |
 | --- | --- |
 | [Guard de versão do Node](src/mind-scripts/node-version-guard/README.md) | encerra a aplicação com uma mensagem clara quando o Node está fora do `engines.node` do serviço; roda por import, `-r` ou pelo comando `mind-node-guard` |
+| [Conversão de comentários](src/mind-scripts/fix-comments/README.md) | converte em bloco `/** */` os comentários `//` de linha inteira do serviço; roda pelo comando `mind-fix-comments` |
 
 ## Variáveis de ambiente
 
