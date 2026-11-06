@@ -32,8 +32,9 @@ export const IGNORED_PATHS = [
 ];
 
 /**
- * Prefixos de diretiva de ferramenta (ESLint, TypeScript, Prettier, Istanbul, c8, V8, webpack). A ferramenta só reconhece
- * a diretiva logo após a abertura `//`, então convertê-la em bloco a desligaria sem aviso.
+ * Prefixos de diretiva de ferramenta (ESLint, TypeScript, Prettier, Istanbul, c8, V8, webpack), mais o `/` da diretiva
+ * `///` do TypeScript e o `#` de `//# sourceMappingURL` e de `//#region`. A ferramenta só reconhece a diretiva logo
+ * após a abertura `//`, então convertê-la em bloco a desligaria sem aviso.
  */
 export const DIRECTIVE_PREFIXES = [
   'eslint-',
@@ -43,6 +44,8 @@ export const DIRECTIVE_PREFIXES = [
   'c8 ignore',
   'v8 ignore',
   'webpack',
+  '/',
+  '#',
 ] as const;
 
 /** Limites da prévia de linhas alteradas por arquivo, só para não inundar o terminal. */

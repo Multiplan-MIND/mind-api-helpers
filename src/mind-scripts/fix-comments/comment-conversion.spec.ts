@@ -3,11 +3,14 @@
  * - convertComments
  *   - converte um comentário de linha inteira em bloco de uma linha, mantendo a indentação
  *   - junta as linhas consecutivas de mesma indentação num só bloco
- *   - absorve no bloco o // vazio que separa dois parágrafos
+ *   - separa os parágrafos do bloco no // vazio entre eles
+ *   - mantém o // vazio que fecha a sequência de comentários
  *   - separa em blocos diferentes os comentários de indentações diferentes
  *   - mantém o comentário que vem depois de código
  *   - mantém as diretivas de ferramenta
  *   - mantém o comentário que contém a sequência de fechamento de bloco
+ *   - mantém o // que começa dentro de um bloco aberto numa linha anterior
+ *   - mantém o // que começa dentro de uma template string e volta a converter depois dela
  *   - mantém o // seguido só de espaços
  *   - reconhece o comentário depois de caracteres invisíveis
  *   - devolve o arquivo com \r\n quando ele usa \r\n
@@ -41,10 +44,17 @@ describe('convertComments', () => {
     });
   });
 
-  it('absorve no bloco o // vazio que separa dois parágrafos', () => {
-    const { content } = convertComments(lines('// primeiro parágrafo', '//', '// segundo parágrafo'));
+  it('separa os parágrafos do bloco no // vazio entre eles', () => {
+    expect(convertComments(lines('// primeiro parágrafo', '//', '// segundo parágrafo'))).toEqual({
+      content: lines('/**', ' * primeiro parágrafo', ' *', ' * segundo parágrafo', ' */'),
+      convertedCount: 2,
+    });
+  });
 
-    expect(content).toBe(lines('/**', ' * primeiro parágrafo', ' * segundo parágrafo', ' */'));
+  it('mantém o // vazio que fecha a sequência de comentários', () => {
+    const { content } = convertComments(lines('// explicação', '//', 'const value = 1;'));
+
+    expect(content).toBe(lines('/** explicação */', '//', 'const value = 1;'));
   });
 
   it('separa em blocos diferentes os comentários de indentações diferentes', () => {
@@ -68,6 +78,9 @@ describe('convertComments', () => {
       '// c8 ignore next',
       '// v8 ignore next',
       '// webpackChunkName: "chunk"',
+      '/// <reference types="vite/client" />',
+      '//# sourceMappingURL=index.js.map',
+      '//#region helpers',
     );
 
     expect(convertComments(source).content).toBe(source);
@@ -77,6 +90,22 @@ describe('convertComments', () => {
     const source = '// termina em */ no meio';
 
     expect(convertComments(source).content).toBe(source);
+  });
+
+  it('mantém o // que começa dentro de um bloco aberto numa linha anterior', () => {
+    const source = lines('/*', '  // old();', '*/', 'const value = 1;');
+
+    expect(convertComments(source).content).toBe(source);
+  });
+
+  it('mantém o // que começa dentro de uma template string e volta a converter depois dela', () => {
+    const { content } = convertComments(
+      lines('const text = `${value({ key: "}" })}', '// texto da string', '`;', '// depois da string'),
+    );
+
+    expect(content).toBe(
+      lines('const text = `${value({ key: "}" })}', '// texto da string', '`;', '/** depois da string */'),
+    );
   });
 
   it('mantém o // seguido só de espaços', () => {

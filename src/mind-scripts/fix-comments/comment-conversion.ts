@@ -5,6 +5,7 @@ import {
   SINGLE_LINE_COMMENT_REGEX,
   SPACE_LIKE_CHAR_CODES,
 } from './constants';
+import { advanceLineContext, createLineContext, startsInsideCommentOrTemplate } from './line-context';
 
 export interface CommentConversion {
   content: string;
@@ -53,7 +54,8 @@ function matchBlankCommentIndentation(line: string): string | null {
 
 /**
  * Agrupa as linhas de comentário consecutivas de mesma indentação para que um parágrafo de várias linhas vire um só
- * bloco. Um `//` vazio no meio do parágrafo é absorvido, senão sobraria solto entre dois blocos gerados.
+ * bloco. Um `//` vazio no meio do parágrafo vira uma linha vazia do bloco, que separa os parágrafos; no fim da
+ * sequência ele não separa nada e fica como está.
  */
 function collectCommentRun(
   lines: string[],
@@ -66,8 +68,14 @@ function collectCommentRun(
   while (nextIndex < lines.length) {
     const nextMatch = matchComment(lines[nextIndex]);
     if (nextMatch?.indentation === firstMatch.indentation) comments.push(nextMatch.comment);
-    else if (matchBlankCommentIndentation(lines[nextIndex]) !== firstMatch.indentation) break;
+    else if (matchBlankCommentIndentation(lines[nextIndex]) === firstMatch.indentation) comments.push('');
+    else break;
     nextIndex++;
+  }
+
+  while (comments[comments.length - 1] === '') {
+    comments.pop();
+    nextIndex--;
   }
 
   return { comments, nextIndex };
@@ -76,7 +84,11 @@ function collectCommentRun(
 function formatCommentBlock(indentation: string, comments: string[]): string[] {
   if (comments.length === 1) return [`${indentation}/** ${comments[0]} */`];
 
-  return [`${indentation}/**`, ...comments.map((comment) => `${indentation} * ${comment}`), `${indentation} */`];
+  return [
+    `${indentation}/**`,
+    ...comments.map((comment) => (comment ? `${indentation} * ${comment}` : `${indentation} *`)),
+    `${indentation} */`,
+  ];
 }
 
 /**
@@ -87,20 +99,22 @@ export function convertComments(content: string): CommentConversion {
   const lineEnding = content.includes('\r\n') ? '\r\n' : '\n';
   const lines = content.split(/\r?\n/);
   const result: string[] = [];
+  const context = createLineContext();
   let convertedCount = 0;
   let index = 0;
 
   while (index < lines.length) {
-    const matched = matchComment(lines[index]);
+    const matched = startsInsideCommentOrTemplate(context) ? null : matchComment(lines[index]);
 
     if (!matched) {
+      advanceLineContext(context, lines[index]);
       result.push(lines[index]);
       index++;
       continue;
     }
 
     const { comments, nextIndex } = collectCommentRun(lines, matched, index);
-    convertedCount += comments.length;
+    convertedCount += comments.filter((comment) => comment !== '').length;
     result.push(...formatCommentBlock(matched.indentation, comments));
     index = nextIndex;
   }

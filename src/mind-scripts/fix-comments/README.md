@@ -33,8 +33,10 @@ Rodado pelo `yarn`, o diretório é a raiz do serviço. O comando também pode e
 ## Comportamento
 
 - Ficam como estão, porque a conversão os quebraria:
-  - as diretivas de ferramenta (`eslint-`, `@ts-`, `prettier-ignore`, `istanbul ignore`, `c8 ignore`, `v8 ignore` e `webpack`), que só funcionam como `//`;
+  - as diretivas de ferramenta (`eslint-`, `@ts-`, `prettier-ignore`, `istanbul ignore`, `c8 ignore`, `v8 ignore`, `webpack`, o `///` do TypeScript e o `//#` de source map e de região), que só funcionam como `//`;
   - o comentário que contém `*/`, que fecharia o bloco gerado antes da hora;
-  - o comentário que vem depois de código na mesma linha.
+  - o comentário que vem depois de código na mesma linha;
+  - a linha que começa dentro de um bloco `/* */` aberto antes ou de uma template string, em que o `//` não é comentário.
+- Um `//` vazio no fim da sequência de comentários também fica como está.
 - Ficam de fora dependências, builds, cobertura, logs, documentação, configuração de editor e de Storybook, Terraform e Cypress. A lista completa está em [`constants.ts`](constants.ts).
 - Cada arquivo convertido é relatado com uma amostra das linhas alteradas. O arquivo que falha na leitura ou na escrita é relatado sem interromper os demais e faz o comando terminar com código 1.
