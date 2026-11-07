@@ -239,6 +239,7 @@ Cada script fica numa pasta própria em `src/mind-scripts/`, com um README que d
 | [Guard de versão do Node](src/mind-scripts/node-version-guard/README.md) | encerra a aplicação com uma mensagem clara quando o Node está fora do `engines.node` do serviço; roda por import, `-r` ou pelo comando `mind-node-guard` |
 | [Conversão de comentários](src/mind-scripts/fix-comments/README.md) | converte em bloco `/** */` os comentários `//` de linha inteira do serviço; roda pelo comando `mind-fix-comments` |
 | [Gate de cobertura](src/mind-scripts/check-coverage/README.md) | compara a cobertura do PR com a da branch de base, com mínimos por métrica (80% de linhas e de branches por padrão) no `coverageThreshold.json` ou na linha de comando, e falha o build abaixo do piso; roda pelo comando `mind-check-coverage` |
+| [Conversão de imports relativos](src/mind-scripts/convert-relative-imports/README.md) | troca pelo alias do `tsconfig.json` os imports relativos de `src/` que algum alias cobre; roda pelo comando `mind-convert-relative-imports` |
 
 ## Variáveis de ambiente
 
