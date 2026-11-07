@@ -2,6 +2,7 @@
  * Testes executados:
  * - loadAliasMappings
  *   - lê os aliases de pasta com os destinos a partir do baseUrl
+ *   - aceita o destino *, que é a própria pasta do baseUrl
  *   - resolve os destinos a partir da pasta do tsconfig.json quando não há baseUrl
  *   - ordena do destino mais longo para o mais curto
  *   - ignora o alias exato, que aponta um único arquivo
@@ -37,6 +38,14 @@ describe('loadAliasMappings', () => {
 
     expect(loadAliasMappings(projectDirectory)).toEqual([
       { aliasPrefix: '@bot/', targetDirectory: join(projectDirectory, 'src', 'bot') },
+    ]);
+  });
+
+  it('aceita o destino *, que é a própria pasta do baseUrl', () => {
+    writeTsconfig({ baseUrl: './src', paths: { '@/*': ['*'] } });
+
+    expect(loadAliasMappings(projectDirectory)).toEqual([
+      { aliasPrefix: '@/', targetDirectory: join(projectDirectory, 'src') },
     ]);
   });
 

@@ -26,7 +26,7 @@ Rodado pelo `yarn`, o diretório é a raiz do serviço. O comando também pode e
 
 ## Comportamento
 
-- Os aliases são os de pasta, terminados em `/*`, com o primeiro destino de cada um, a partir do `baseUrl` ou, sem ele, da pasta do `tsconfig.json`. Um alias exato, que aponta um único arquivo, não entra.
+- Os aliases são os de pasta, terminados em `/*`, com o primeiro destino de cada um, em `dir/*` ou `*`, que é a própria base, a partir do `baseUrl` ou, sem ele, da pasta do `tsconfig.json`. Um alias exato, que aponta um único arquivo, não entra.
 - Quando mais de um alias cobre o caminho, vale o de destino mais específico: com `@app/*` em `src/*` e `@bot/*` em `src/bot/*`, um import de `src/bot/` vira `@bot/`. O import da própria pasta de um alias, como `'../bot'`, vira o alias mais genérico, `@app/bot`.
 - São convertidos o caminho depois de `from`, em `import` e em `export`, e o `import` só de efeito, como `import './setup'`. Ficam como estão o `import()` dinâmico, o `require` e o caminho que nenhum alias cobre.
 - A troca é feita pelo texto, então um `from './x'` dentro de string ou de comentário também é trocado.

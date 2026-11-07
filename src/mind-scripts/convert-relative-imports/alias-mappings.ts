@@ -30,20 +30,16 @@ function readTsconfig(tsconfigPath: string): TsconfigContent {
 
 function toAliasMapping(alias: string, targets: unknown, baseDirectory: string): AliasMapping | undefined {
   const [target] = Array.isArray(targets) ? targets : [];
-  if (!alias.endsWith(WILDCARD_SUFFIX) || typeof target !== 'string' || !target.endsWith(WILDCARD_SUFFIX)) {
-    return undefined;
-  }
+  const isFolderTarget = typeof target === 'string' && (target === '*' || target.endsWith(WILDCARD_SUFFIX));
+  if (!alias.endsWith(WILDCARD_SUFFIX) || !isFolderTarget) return undefined;
 
-  return {
-    aliasPrefix: alias.slice(0, -1),
-    targetDirectory: resolve(baseDirectory, target.slice(0, -WILDCARD_SUFFIX.length)),
-  };
+  return { aliasPrefix: alias.slice(0, -1), targetDirectory: resolve(baseDirectory, target.slice(0, -1)) };
 }
 
 /**
- * Só entram os aliases de pasta, terminados em `/*`: um alias exato aponta um único arquivo, que não se troca por
- * prefixo. Os destinos vêm do `baseUrl`, ou da pasta do `tsconfig.json` sem ele, e ficam do mais longo para o mais
- * curto, para que `@app/*` não capture o que um alias de módulo cobre.
+ * Só entram os aliases de pasta, terminados em `/*` e com destino `dir/*` ou `*`, que é a própria base: um alias exato
+ * aponta um único arquivo, que não se troca por prefixo. Os destinos vêm do `baseUrl`, ou da pasta do `tsconfig.json`
+ * sem ele, e ficam do mais longo para o mais curto, para que `@app/*` não capture o que um alias de módulo cobre.
  */
 export function loadAliasMappings(projectDirectory: string): AliasMapping[] {
   const tsconfigPath = join(projectDirectory, TSCONFIG_FILE_NAME);
