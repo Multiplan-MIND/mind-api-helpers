@@ -13,7 +13,8 @@
     "mind-convert-relative-imports": "convert-relative-imports.js",
     "mind-fix-comments": "fix-comments.js",
     "mind-node-guard": "node-version-guard.js",
-    "mind-observability": "observability.js"
+    "mind-observability": "observability.js",
+    "mind-prune-ingress-paths": "prune-ingress-paths.js"
   },
   "types": "dist/index.d.ts",
   "files": [
@@ -22,7 +23,8 @@
     "/node-version-guard.js",
     "/fix-comments.js",
     "/check-coverage.js",
-    "/convert-relative-imports.js"
+    "/convert-relative-imports.js",
+    "/prune-ingress-paths.js"
   ],
   "scripts": {
     "lint": "eslint \"src/**/*.ts\"",
@@ -44,7 +46,8 @@
     "axios": "1.6.0",
     "jsonwebtoken": "9.0.2",
     "jwk-to-pem": "2.0.5",
-    "semver": "7.8.5"
+    "semver": "7.8.5",
+    "yaml": "2.9.1"
   },
   "devDependencies": {
     "@apollo/server": "5.5.1",
