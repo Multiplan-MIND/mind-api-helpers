@@ -3,7 +3,7 @@ import { Document, parseAllDocuments } from 'yaml';
 
 import { SEPARATOR } from './constants';
 import { resolveIngressFilePath } from './ingress-file-path';
-import { PrunedPath, pruneInvalidPaths } from './path-pruning';
+import { isLeftWithoutRules, PrunedPath, pruneInvalidPaths } from './path-pruning';
 
 function readDocuments(ingressFilePath: string): Document[] {
   const documents = parseAllDocuments(readFileSync(ingressFilePath, 'utf8'));
@@ -27,9 +27,36 @@ function reportPrunedPaths(ingressFilePath: string, prunedPaths: PrunedPath[]): 
   }
 
   for (const { path, serviceName } of prunedPaths) {
-    console.log(`Removed: path=${path} service=${serviceName} (${serviceName.length} characters)`);
+    const pathLabel = path === undefined ? '' : `path=${path} `;
+    console.log(`Removed: ${pathLabel}service=${serviceName} (${serviceName.length} characters)`);
   }
   console.log(`\n${prunedPaths.length} path(s) removed from ${ingressFilePath}`);
+}
+
+/** A limpeza não resolve o Ingress que perdeu todas as regras, e o `kubectl apply` continua falhando nele. */
+function reportIngressesWithoutRules(ingressNames: string[]): void {
+  for (const ingressName of ingressNames) {
+    console.log(
+      `Warning: ingress ${ingressName} has no rules left and no defaultBackend, so the cluster will reject it`,
+    );
+  }
+}
+
+/** Limpa cada documento e guarda o nome dos Ingress que ficaram sem regra por causa da limpeza. */
+function pruneDocuments(documents: Document[]): { prunedPaths: PrunedPath[]; ingressesWithoutRules: string[] } {
+  const prunedPaths: PrunedPath[] = [];
+  const ingressesWithoutRules: string[] = [];
+
+  documents.forEach((document, index) => {
+    const documentPrunedPaths = pruneInvalidPaths(document);
+    prunedPaths.push(...documentPrunedPaths);
+
+    if (documentPrunedPaths.length > 0 && isLeftWithoutRules(document)) {
+      ingressesWithoutRules.push(String(document.getIn(['metadata', 'name']) ?? `#${index + 1}`));
+    }
+  });
+
+  return { prunedPaths, ingressesWithoutRules };
 }
 
 /**
@@ -42,12 +69,13 @@ export function pruneIngressPaths(commandArguments: string[], workingDirectory: 
   try {
     const ingressFilePath = resolveIngressFilePath(commandArguments, workingDirectory);
     const documents = readDocuments(ingressFilePath);
-    const prunedPaths = documents.flatMap((document) => pruneInvalidPaths(document));
+    const { prunedPaths, ingressesWithoutRules } = pruneDocuments(documents);
 
     if (prunedPaths.length > 0) writeDocuments(ingressFilePath, documents);
 
     console.log(`\n${SEPARATOR}\n     Ingress invalid paths cleanup\n${SEPARATOR}\n`);
     reportPrunedPaths(ingressFilePath, prunedPaths);
+    reportIngressesWithoutRules(ingressesWithoutRules);
     console.log(`\n${SEPARATOR}\n`);
 
     return 0;

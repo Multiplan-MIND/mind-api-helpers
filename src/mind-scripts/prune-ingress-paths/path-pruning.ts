@@ -2,13 +2,21 @@ import { Document, isMap, isSeq } from 'yaml';
 
 import { SERVICE_NAME_MAXIMUM_LENGTH, SERVICE_NAME_PATTERN } from './constants';
 
+/** O `path` é opcional no Kubernetes quando o `pathType` é `ImplementationSpecific`. */
 export interface PrunedPath {
-  path: string;
+  path?: string;
   serviceName: string;
 }
 
 function isValidServiceName(serviceName: string): boolean {
   return serviceName.length <= SERVICE_NAME_MAXIMUM_LENGTH && SERVICE_NAME_PATTERN.test(serviceName);
+}
+
+/** Um Ingress sem regra nenhuma e sem `defaultBackend` também é recusado pelo Kubernetes. */
+export function isLeftWithoutRules(document: Document): boolean {
+  const rules = document.getIn(['spec', 'rules']);
+
+  return isSeq(rules) && rules.items.length === 0 && !document.hasIn(['spec', 'defaultBackend']);
 }
 
 /**
@@ -32,7 +40,8 @@ export function pruneInvalidPaths(document: Document): PrunedPath[] {
       const serviceName = pathEntry.getIn(['backend', 'service', 'name']);
       if (typeof serviceName !== 'string' || isValidServiceName(serviceName)) return true;
 
-      prunedPaths.push({ path: String(pathEntry.get('path')), serviceName });
+      const path = pathEntry.get('path');
+      prunedPaths.push(path == null ? { serviceName } : { path: String(path), serviceName });
       return false;
     });
 

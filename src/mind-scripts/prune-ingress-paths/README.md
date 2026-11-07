@@ -22,7 +22,7 @@ O caminho é relativo ao diretório em que o comando roda, que pelo `yarn` é a 
 
 ## Comportamento
 
-- Um nome de Service válido é um rótulo DNS-1035: minúsculas, dígitos e hífen, começando por letra, terminando por letra ou dígito e com no máximo 63 caracteres. O caminho com outro nome sai, e a regra que fica sem caminho nenhum sai junto, porque o Kubernetes também recusa `http.paths` vazio. O caminho cujo backend não é um Service fica.
+- Um nome de Service válido é um rótulo DNS-1035: minúsculas, dígitos e hífen, começando por letra, terminando por letra ou dígito e com no máximo 63 caracteres. O caminho com outro nome sai, e a regra que fica sem caminho nenhum sai junto, porque o Kubernetes também recusa `http.paths` vazio. O caminho cujo backend não é um Service fica. Quando um Ingress perde todas as regras e não tem `defaultBackend`, o cluster continua a recusá-lo, e o log avisa.
 - O arquivo pode ter vários documentos YAML, e todos são verificados. Ele só é reescrito quando algum caminho sai, para não reformatar a cada build um arquivo que outras pipelines também editam; os comentários são mantidos.
 - Como o comando reescreve o arquivo que recebe, só aceita um `.yml` ou `.yaml` dentro do diretório em que roda, inclusive depois de resolver links simbólicos.
 - O comando termina com código 1 quando o argumento é recusado, o arquivo não existe ou o YAML não faz parse, sem mexer no arquivo. Caso contrário, termina com código 0.

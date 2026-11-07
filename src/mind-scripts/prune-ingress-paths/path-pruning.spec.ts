@@ -4,12 +4,16 @@
  *   - remove o caminho com nome de Service acima de 63 caracteres ou fora do DNS-1035 e devolve o que saiu
  *   - mantém o caminho com nome válido e o que não aponta para um Service
  *   - remove a regra que fica sem caminho nenhum
+ *   - devolve sem path o caminho removido que não tem path
  *   - não mexe no documento sem spec.rules
+ * - isLeftWithoutRules
+ *   - aponta o Ingress sem regra e sem defaultBackend
+ *   - não aponta o Ingress com regra, com defaultBackend ou sem spec.rules
  */
 
 import { parseDocument } from 'yaml';
 
-import { pruneInvalidPaths } from './path-pruning';
+import { isLeftWithoutRules, pruneInvalidPaths } from './path-pruning';
 
 /** Fixtures */
 const VALID_SERVICE = 'concierge-develop';
@@ -68,10 +72,31 @@ describe('pruneInvalidPaths', () => {
     expect(remainingPaths(document)).toEqual([['/concierge/develop']]);
   });
 
+  it('devolve sem path o caminho removido que não tem path', () => {
+    const entryWithoutPath = { pathType: 'ImplementationSpecific', backend: { service: { name: LONG_SERVICE } } };
+    const document = ingressDocument([entryWithoutPath]);
+
+    expect(pruneInvalidPaths(document)).toEqual([{ serviceName: LONG_SERVICE }]);
+  });
+
   it('não mexe no documento sem spec.rules', () => {
     const document = parseDocument('kind: Service\nspec:\n  ports: []\n');
 
     expect(pruneInvalidPaths(document)).toEqual([]);
     expect(document.toString()).toBe('kind: Service\nspec:\n  ports: []\n');
+  });
+});
+
+describe('isLeftWithoutRules', () => {
+  it('aponta o Ingress sem regra e sem defaultBackend', () => {
+    expect(isLeftWithoutRules(parseDocument('kind: Ingress\nspec:\n  rules: []\n'))).toBe(true);
+  });
+
+  it.each([
+    ['com regra', 'kind: Ingress\nspec:\n  rules:\n    - host: a\n'],
+    ['com defaultBackend', 'kind: Ingress\nspec:\n  defaultBackend:\n    service:\n      name: a\n  rules: []\n'],
+    ['sem spec.rules', 'kind: Service\nspec:\n  ports: []\n'],
+  ])('não aponta o Ingress %s', (_reason, source) => {
+    expect(isLeftWithoutRules(parseDocument(source))).toBe(false);
   });
 });
