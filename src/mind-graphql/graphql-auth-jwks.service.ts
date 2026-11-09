@@ -1,5 +1,5 @@
 import * as jwt from 'jsonwebtoken';
-import * as jwkToPem from 'jwk-to-pem';
+import jwkToPem from 'jwk-to-pem';
 import axios from 'axios';
 
 import { Inject, Injectable } from '@nestjs/common';
@@ -23,7 +23,7 @@ export class GraphqlAuthJwksService implements GqlOptionsFactory<ApolloFederatio
 
   async createGqlOptions(): Promise<ApolloFederationDriverConfig> {
     return buildMindGqlOptions({
-      // Serves /<any prefix>/graphql; Express 5 (path-to-regexp 8) requires a named wildcard
+      /** Serves /<any prefix>/graphql; Express 5 (path-to-regexp 8) requires a named wildcard */
       path: '/*splat/graphql',
       context: ({ req }) => this.mindHandleContext({ req }),
     });
