@@ -220,10 +220,10 @@ GraphQLModule.forRootAsync<ApolloFederationDriverConfig>({
 
 ### Observabilidade (OpenTelemetry)
 
-O módulo `mind-observability` liga traces e métricas do OpenTelemetry sem nenhuma linha de código no serviço, CommonJS ou ES module. Basta carregar o `mind-api-helpers/observability` no comando que inicia a aplicação:
+O módulo `mind-observability` liga traces e métricas do OpenTelemetry sem nenhuma linha de código no serviço, CommonJS ou ES module. Basta carregar o `mind-api-helpers/bin/observability` no comando que inicia a aplicação:
 
 ```bash
-node -r mind-api-helpers/observability dist/main.js
+node -r mind-api-helpers/bin/observability dist/main.js
 ```
 
 O comando `mind-observability`, instalado pelo pacote, faz o mesmo: `mind-observability dist/main.js`.

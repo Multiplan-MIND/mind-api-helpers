@@ -9,24 +9,18 @@
   "private": true,
   "main": "dist/index.js",
   "bin": {
-    "mind-check-coverage": "check-coverage.js",
-    "mind-check-dependencies": "check-dependencies.js",
-    "mind-convert-relative-imports": "convert-relative-imports.js",
-    "mind-fix-comments": "fix-comments.js",
-    "mind-node-guard": "node-version-guard.js",
-    "mind-observability": "observability.js",
-    "mind-prune-ingress-paths": "prune-ingress-paths.js"
+    "mind-check-coverage": "bin/check-coverage.js",
+    "mind-check-dependencies": "bin/check-dependencies.js",
+    "mind-convert-relative-imports": "bin/convert-relative-imports.js",
+    "mind-fix-comments": "bin/fix-comments.js",
+    "mind-node-guard": "bin/node-version-guard.js",
+    "mind-observability": "bin/observability.js",
+    "mind-prune-ingress-paths": "bin/prune-ingress-paths.js"
   },
   "types": "dist/index.d.ts",
   "files": [
     "/dist",
-    "/observability.js",
-    "/node-version-guard.js",
-    "/fix-comments.js",
-    "/check-coverage.js",
-    "/convert-relative-imports.js",
-    "/prune-ingress-paths.js",
-    "/check-dependencies.js"
+    "/bin"
   ],
   "scripts": {
     "lint": "eslint \"src/**/*.ts\"",

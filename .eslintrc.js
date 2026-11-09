@@ -15,8 +15,8 @@ module.exports = {
   ignorePatterns: ['.eslintrc.js', '**/*.spec.ts', '**/*.spec-helper.ts'],
   overrides: [
     {
-      // Atalhos CommonJS da raiz do pacote: ficam fora do tsconfig e precisam de `require()` para `node -r` e `bin`.
-      files: ['*.js'],
+      // Atalhos CommonJS de `bin/`: ficam fora do tsconfig e precisam de `require()` para `node -r` e `bin`.
+      files: ['bin/*.js'],
       parserOptions: { project: null },
       rules: {
         '@typescript-eslint/no-require-imports': 'off',

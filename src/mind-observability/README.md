@@ -4,15 +4,15 @@ O módulo `mind-observability` liga o SDK do OpenTelemetry com todas as instrume
 
 ## Ativação
 
-O `mind-api-helpers/observability` entra no comando que inicia a aplicação, sem mudar o código:
+O `mind-api-helpers/bin/observability` entra no comando que inicia a aplicação, sem mudar o código:
 
 ```bash
-node -r mind-api-helpers/observability dist/main.js
+node -r mind-api-helpers/bin/observability dist/main.js
 ```
 
 O mesmo comando vale para serviço CommonJS e para serviço em ES module (`"type": "module"`). Além de iniciar o SDK, ele registra o hook síncrono do `import-in-the-middle` (`module.registerHooks`), que deixa as instrumentações alterarem também os módulos carregados por `import`.
 
-Use `-r`, não `--import`: o resolvedor ESM do Node não completa a extensão, e `--import mind-api-helpers/observability` falha com `ERR_MODULE_NOT_FOUND`.
+Use `-r`, não `--import`: o resolvedor ESM do Node não completa a extensão, e `--import mind-api-helpers/bin/observability` falha com `ERR_MODULE_NOT_FOUND`.
 
 O pacote também instala o comando `mind-observability`, que faz o mesmo sem o `-r`:
 
@@ -25,8 +25,8 @@ O comando inicia a observabilidade e depois roda o script no mesmo processo, do 
 Quando as variáveis estão num `.env`, o Node precisa carregá-lo antes do `register`, porque a aplicação só lê o arquivo depois:
 
 ```bash
-node --env-file-if-exists=.env -r mind-api-helpers/observability dist/main.js
-nest start --exec "node --env-file-if-exists=.env -r mind-api-helpers/observability"
+node --env-file-if-exists=.env -r mind-api-helpers/bin/observability dist/main.js
+nest start --exec "node --env-file-if-exists=.env -r mind-api-helpers/bin/observability"
 ```
 
 O Node não sobrescreve uma variável já definida no ambiente do processo, e sem o arquivo só avisa `.env not found` e segue.
@@ -133,7 +133,7 @@ A raiz do módulo guarda o que serve aos dois sinais, `tracing/` o que produz ou
 
 | Arquivo | O que é e para que serve |
 | --- | --- |
-| `observability.js` (raiz do pacote) | atalho para `-r mind-api-helpers/observability` e para o comando `mind-observability`, sem citar o `dist/`; pelo `-r` carrega o `register`, pelo comando carrega o `observability-command` |
+| `bin/observability.js` | atalho para `-r mind-api-helpers/bin/observability` e para o comando `mind-observability`, sem citar o `dist/`; pelo `-r` carrega o `register`, pelo comando carrega o `observability-command` |
 | `register.ts` | ponto de entrada carregado pelo `-r`; apenas chama `startObservability()` |
 | `observability-command.ts` | ponto de entrada do comando `mind-observability`; carrega o `register` e depois roda o script da aplicação no mesmo processo |
 | `start-observability.ts` | o switch: decide pelas variáveis se a telemetria liga e só então carrega o SDK, para um serviço desligado não pagar nada |
