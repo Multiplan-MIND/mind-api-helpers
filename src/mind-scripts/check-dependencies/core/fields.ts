@@ -51,15 +51,21 @@ function text({ default: fallback, secret = false }: TextOptions = {}): Field<st
   };
 }
 
-/** Texto que, depois de resolvido, precisa ser uma URL; a variável ausente sai só na lista de variáveis que faltam. */
+/**
+ * Texto que, depois de resolvido, precisa ser uma URL, inclusive quando um padrão vazio o deixa vazio; a variável
+ * ausente sai só na lista de variáveis que faltam.
+ */
 function url(options: TextOptions = {}): Field<string> {
   const base = text(options);
 
   return {
     ...base,
     resolve: (raw, context) => {
+      const template = isText(raw) ? raw : options.default ?? '';
       const value = base.resolve(raw, context);
-      if (value !== '' && !URL.canParse(value)) context.invalid('is not a valid URL');
+      if (!context.resolver.referencesMissingVariable(template) && !URL.canParse(value)) {
+        context.invalid('is not a valid URL');
+      }
       return value;
     },
   };
@@ -72,12 +78,15 @@ function port({ default: fallback }: Omit<TextOptions, 'secret'> = {}): Field<nu
     required: fallback === undefined,
     accepts: (raw) => isText(raw) || Number.isInteger(raw),
     resolve: (raw, { resolver, invalid }) => {
-      const value = typeof raw === 'number' ? String(raw) : resolver.resolve(isText(raw) ? raw : fallback);
+      const template = isText(raw) ? raw : fallback ?? '';
+      const value = typeof raw === 'number' ? String(raw) : resolver.resolve(template);
       const number = Number(value);
       if (PORT_PATTERN.test(value) && number > 0 && number <= MAXIMUM_PORT) return number;
 
-      /** A variável ausente já sai na lista de variáveis que faltam; aqui só o valor presente e inválido. */
-      if (value !== '') invalid(`must be a number between 1 and ${MAXIMUM_PORT}`);
+      /** A variável ausente já sai na lista de variáveis que faltam; o vazio de um padrão vazio é apontado aqui. */
+      if (typeof raw === 'number' || !resolver.referencesMissingVariable(template)) {
+        invalid(`must be a number between 1 and ${MAXIMUM_PORT}`);
+      }
       return number;
     },
   };

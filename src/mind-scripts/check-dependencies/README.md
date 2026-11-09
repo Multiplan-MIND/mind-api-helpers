@@ -104,7 +104,7 @@ O comando lê o arquivo inteiro antes de testar qualquer dependência, e falha s
 | o valor tem o formato errado          | `<campo> of "<nome>" in <arquivo> must be <formato>`                          |
 | falta campo obrigatório               | `"<nome>" in <arquivo> needs <campo>`                                         |
 
-Depois de ler, resolve as variáveis de todas as dependências habilitadas e junta na linha `environment` as variáveis ausentes, as portas fora de 1 a 65535 e as URLs inválidas.
+Depois de ler, resolve as variáveis de todas as dependências habilitadas e junta na linha `environment` as variáveis ausentes, as portas fora de 1 a 65535 e as URLs inválidas, inclusive a porta ou a URL que um padrão vazio, como `${API_URL:-}`, deixa vazia.
 
 ### Exemplos completos
 

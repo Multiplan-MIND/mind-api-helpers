@@ -25,6 +25,16 @@ export class TemplateResolver {
     });
   }
 
+  /**
+   * Diz se o modelo cita variável sem padrão que falta. O campo que confere o formato pula a conferência nesse caso,
+   * porque a variável já sai na lista de ausentes; o vazio que vem de um padrão vazio continua conferido.
+   */
+  referencesMissingVariable(template: string): boolean {
+    return [...template.matchAll(VARIABLE_REFERENCE)].some(
+      ([, name, fallback]) => fallback === undefined && this.missingVariables.has(name),
+    );
+  }
+
   /** Percorre objetos e listas, como o corpo de uma requisição, trocando as referências só nos textos. */
   resolveJson(value: unknown, secret = false): unknown {
     if (typeof value === 'string') return this.resolve(value, secret);

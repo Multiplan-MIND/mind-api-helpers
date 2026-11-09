@@ -6,6 +6,8 @@
  *   - aceita padrão vazio
  *   - registra a variável sem padrão que falta e a troca por vazio
  *   - guarda como segredo só o valor de variável que entra em campo secreto
+ * - TemplateResolver.referencesMissingVariable
+ *   - reconhece só a referência sem padrão a variável que faltou
  * - TemplateResolver.resolveJson
  *   - troca as referências nos textos de objetos e listas e mantém os demais valores
  * - maskSecrets
@@ -57,6 +59,18 @@ describe('TemplateResolver.resolve', () => {
     resolver.resolve('${UNSET:-fallback}', true);
 
     expect([...resolver.secrets]).toEqual(['token-value']);
+  });
+});
+
+describe('TemplateResolver.referencesMissingVariable', () => {
+  it('reconhece só a referência sem padrão a variável que faltou', () => {
+    const resolver = resolverFor({ PRESENT: 'x' });
+    resolver.resolve('${MISSING}');
+
+    expect(resolver.referencesMissingVariable('https://${MISSING}/health')).toBe(true);
+    expect(resolver.referencesMissingVariable('${MISSING:-}')).toBe(false);
+    expect(resolver.referencesMissingVariable('${PRESENT}')).toBe(false);
+    expect(resolver.referencesMissingVariable('sem variável')).toBe(false);
   });
 });
 

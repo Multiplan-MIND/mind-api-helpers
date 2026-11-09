@@ -4,6 +4,7 @@
  *   - devolve o módulo carregado
  *   - diz qual pacote falta quando ele não está instalado
  *   - repassa o erro que não é de módulo ausente
+ *   - repassa o módulo ausente que não é o próprio pacote
  */
 
 import { loadDriver } from './load-driver';
@@ -26,5 +27,11 @@ describe('loadDriver', () => {
     const failure = new Error('syntax error in driver');
 
     await expect(loadDriver('amqplib', () => Promise.reject(failure))).rejects.toBe(failure);
+  });
+
+  it('repassa o módulo ausente que não é o próprio pacote', async () => {
+    const transitive = Object.assign(new Error("Cannot find module 'bson'"), { code: 'MODULE_NOT_FOUND' });
+
+    await expect(loadDriver('mongoose', () => Promise.reject(transitive))).rejects.toBe(transitive);
   });
 });

@@ -5,10 +5,10 @@
  *   - é obrigatório quando não tem padrão
  *   - guarda como segredo só o valor do campo secreto
  * - field.url
- *   - aponta a URL inválida e deixa a vazia para a lista de variáveis ausentes
+ *   - aponta a URL inválida, inclusive a vazia por padrão vazio, e deixa a da variável ausente para a lista dela
  * - field.port
  *   - converte o texto e o número em porta
- *   - aponta a porta fora do intervalo e deixa a vazia para a lista de variáveis ausentes
+ *   - aponta a porta fora do intervalo, inclusive a vazia por padrão vazio, e deixa a da variável ausente para a lista dela
  * - field.textList e field.textMap
  *   - resolvem cada item e ficam vazios sem valor no arquivo
  * - field.json
@@ -56,9 +56,11 @@ describe('field.text', () => {
 });
 
 describe('field.url', () => {
-  it('aponta a URL inválida e deixa a vazia para a lista de variáveis ausentes', () => {
+  it('aponta a URL inválida, inclusive a vazia por padrão vazio, e deixa a da variável ausente para a lista dela', () => {
     expect(resolveField(field.url(), 'https://api.example.com').problems).toEqual([]);
     expect(resolveField(field.url(), 'not a url').problems).toEqual(['is not a valid URL']);
+    expect(resolveField(field.url(), '${API_URL:-}').problems).toEqual(['is not a valid URL']);
+    expect(resolveField(field.url({ default: '${API_URL:-}' }), undefined).problems).toEqual(['is not a valid URL']);
 
     const missing = resolveField(field.url(), '${API_URL}');
     expect(missing.problems).toEqual([]);
@@ -76,9 +78,10 @@ describe('field.port', () => {
     expect(port.accepts(5672.5)).toBe(false);
   });
 
-  it('aponta a porta fora do intervalo e deixa a vazia para a lista de variáveis ausentes', () => {
+  it('aponta a porta fora do intervalo, inclusive a vazia por padrão vazio, e deixa a da variável ausente para a lista dela', () => {
     expect(resolveField(field.port(), '63a9').problems).toEqual(['must be a number between 1 and 65535']);
     expect(resolveField(field.port(), 70_000).problems).toEqual(['must be a number between 1 and 65535']);
+    expect(resolveField(field.port(), '${PORT:-}').problems).toEqual(['must be a number between 1 and 65535']);
     expect(resolveField(field.port(), '${PORT}').problems).toEqual([]);
   });
 });
