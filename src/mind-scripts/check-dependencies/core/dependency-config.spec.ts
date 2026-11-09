@@ -3,6 +3,7 @@
  * - readDependencyConfig
  *   - lê as dependências na ordem do arquivo, com o enabled separado dos campos
  *   - aceita a dependência sem campo nenhum, que usa os padrões
+ *   - ignora o $comment da raiz
  *   - recusa o arquivo que não é JSON
  *   - recusa o conteúdo que não é objeto
  *   - recusa o arquivo sem dependência
@@ -11,6 +12,7 @@
  *   - recusa o campo com valor fora do formato, com a descrição do campo
  *   - recusa a dependência sem o campo obrigatório
  *   - recusa o enabled que não é texto
+ *   - recusa o $comment que não é texto
  */
 
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -90,6 +92,15 @@ describe('readDependencyConfig', () => {
     ]);
   });
 
+  it('ignora o $comment da raiz', () => {
+    writeConfig({ $comment: 'Dependências do mind-check-dependencies', valkey: { type: 'cache' } });
+
+    expect(readDependencyConfig(configPath, DEFINITIONS)).toEqual([
+      { dependency: 'valkey', definition: cache, enabled: undefined, fields: {} },
+    ]);
+    expect(readError({ $comment: 'só o comentário' })).toBe(`${configPath} declares no dependency`);
+  });
+
   it('recusa o arquivo que não é JSON', () => {
     expect(readError('{ cache')).toContain(`Failed to read ${configPath}`);
   });
@@ -130,5 +141,9 @@ describe('readDependencyConfig', () => {
     expect(readError({ status: { type: 'api', url: 'https://example.com', enabled: false } })).toContain(
       'enabled of "status"',
     );
+  });
+
+  it('recusa o $comment que não é texto', () => {
+    expect(readError({ $comment: 1, valkey: { type: 'cache' } })).toBe(`$comment in ${configPath} must be a string`);
   });
 });

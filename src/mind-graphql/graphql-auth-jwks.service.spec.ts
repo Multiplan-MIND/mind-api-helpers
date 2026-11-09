@@ -16,7 +16,7 @@ import {
 } from './graphql-auth.spec-helper';
 
 jest.mock('axios');
-// Stubs the scalar instead of installing `graphql`; see graphql-auth.spec-helper.ts for the reason
+/** Stubs the scalar instead of installing `graphql`; see graphql-auth.spec-helper.ts for the reason */
 jest.mock('graphql-type-json', () => ({ __esModule: true, default: { name: 'JSON' } }));
 type RedisMock = { get: jest.Mock; set: jest.Mock };
 

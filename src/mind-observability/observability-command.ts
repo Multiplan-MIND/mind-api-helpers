@@ -8,7 +8,7 @@ const STDERR_FILE_DESCRIPTOR = 2;
 const MESSAGE_PREFIX = '[mind-observability]';
 
 /**
- * O comando `mind-observability <script> [argumentos]` equivale a `node -r mind-api-helpers/observability <script>
+ * O comando `mind-observability <script> [argumentos]` equivale a `node -r mind-api-helpers/bin/observability <script>
  * [argumentos]`. O `register` vem no primeiro import, antes de a aplicação carregar qualquer módulo a instrumentar, e a
  * aplicação roda no mesmo processo: sinais, código de saída e memória ficam iguais aos do `-r`, sem um processo pai
  * no meio. O `process.argv` é refeito como o Node o montaria, com o script em caminho absoluto, porque o `runMain`

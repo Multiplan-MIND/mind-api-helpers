@@ -436,7 +436,9 @@ O script busca e consolida changelogs automaticamente. Para que funcione correta
 
 ```markdown
 ## Changelog:
+
 <!-- changelog:start -->
+
 - Descrição da mudança 1
 - Descrição da mudança 2
 - Descrição da mudança 3

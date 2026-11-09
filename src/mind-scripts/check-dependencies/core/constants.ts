@@ -1,6 +1,9 @@
 /** Lido da raiz do serviço quando o `--config` não aponta outro arquivo. */
 export const CONFIG_FILE_NAME = 'dependencyChecks.json';
 
+/** Chave da raiz que o JSON de configuração reserva para um comentário em texto, já que o formato não aceita `//`. */
+export const COMMENT_KEY = '$comment';
+
 /** Lido da raiz do serviço quando existe, como o `ConfigModule` do Nest faz no boot; a variável do processo vence. */
 export const ENV_FILE_NAME = '.env';
 

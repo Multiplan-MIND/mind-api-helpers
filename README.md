@@ -7,14 +7,14 @@
 Biblioteca interna de apoio dos serviços MIND, escrita em NestJS. Não é uma aplicação: não tem
 `main.ts` nem servidor HTTP — só o que é compartilhado entre os `mind-api-*` / `multi-api-*`:
 
-| Módulo          | O que oferece                                                                                                              |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `mind-logger`   | logger baseado em winston, com escopo por módulo (`MindLoggerModule`, `MindLoggerService`, `@MindLogger()`, `logPrefix()`) |
-| `mind-helpers`  | `MindError`, `toError()`, `jsonError()` e `isNullOrUndefined()`                                                            |
-| `mind-graphql`  | `GraphqlAuthJwksService` e `GraphqlAuthGatewayService` (Apollo Federation 2) e os _input types_ de consulta                |
-| `mind-mongoose` | `getQuery()` / `getOptions()`, que traduzem os _inputs_ GraphQL em filtro e opções do Mongoose                             |
-| `mind-observability`  | traces (`tracing/`) e métricas (`metrics/`) do OpenTelemetry sem código no serviço (`register`, `currentTraceId()`, `shutdownObservability()`), ver o [README do módulo](src/mind-observability/README.md) |
-| `mind-scripts`  | scripts para os serviços, cada um com pasta e README próprios, ver [Scripts](#scripts-mind-scripts) |
+| Módulo               | O que oferece                                                                                                                                                                                              |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mind-logger`        | logger baseado em winston, com escopo por módulo (`MindLoggerModule`, `MindLoggerService`, `@MindLogger()`, `logPrefix()`)                                                                                 |
+| `mind-helpers`       | `MindError`, `toError()`, `jsonError()` e `isNullOrUndefined()`                                                                                                                                            |
+| `mind-graphql`       | `GraphqlAuthJwksService` e `GraphqlAuthGatewayService` (Apollo Federation 2) e os _input types_ de consulta                                                                                                |
+| `mind-mongoose`      | `getQuery()` / `getOptions()`, que traduzem os _inputs_ GraphQL em filtro e opções do Mongoose                                                                                                             |
+| `mind-observability` | traces (`tracing/`) e métricas (`metrics/`) do OpenTelemetry sem código no serviço (`register`, `currentTraceId()`, `shutdownObservability()`), ver o [README do módulo](src/mind-observability/README.md) |
+| `mind-scripts`       | scripts para os serviços, cada um com pasta e README próprios, ver [Scripts](#scripts-mind-scripts)                                                                                                        |
 
 Tudo o que é público passa pelo _barrel_ `src/index.ts`: um arquivo novo só fica visível para os
 serviços quando é reexportado lá.
@@ -51,10 +51,14 @@ O `yarn install` **já compila o `dist/`**, por conta do ciclo declarado no `pac
 
 - `preinstall: yarn --ignore-scripts` instala a árvore de dependências incluindo as `devDependencies`,
   garantindo que o `typescript` exista;
-- `postinstall: yarn build` compila `src/` em `dist/`, que é o que `main` e `types` apontam.
+- `postinstall: yarn build && husky` compila `src/` em `dist/`, que é o que `main` e `types` apontam, e instala os hooks de Git.
 
 Isso existe porque o `dist/` não é versionado (está no `.gitignore`) e os serviços instalam esta
 biblioteca direto do git — sem esse ciclo, o consumidor receberia o pacote sem código compilado.
+
+Os hooks ficam no `postinstall`, e não no `prepare` como no `mind-api-concierge`: com um script `prepare`, o yarn 1 passa a empacotar a dependência git pelo campo `files`, o `tsconfig.build.json` fica de fora e o build quebra no consumidor. Num consumidor não há `.git` dentro do pacote, e o husky apenas avisa e sai sem erro.
+
+**O hook de pre-commit roda `yarn lint-staged` e, em seguida, a suíte de testes inteira.** O `lint-staged` executa, em ordem, o build (que faz as vezes de checagem de tipos e atualiza o `dist/` usado pelo passo seguinte), a normalização de comentários, o lint com correção e sem tolerância a aviso, e a formatação, todos no projeto inteiro, e não apenas nos arquivos preparados para commit. Os hooks aplicam `nvm use` por conta própria, então um commit feito de um terminal em outra versão de Node não quebra por isso. O hook de `commit-msg` valida a mensagem contra o padrão de conventional commits (`commitlint.config.ts`).
 
 ## Scripts
 
@@ -64,6 +68,9 @@ biblioteca direto do git — sem esse ciclo, o consumidor receberia o pacote sem
 | `yarn test`         | jest (com `--experimental-vm-modules`), configuração em `jest.config.json`                          |
 | `yarn lint`         | eslint; o prettier roda como regra do eslint                                                        |
 | `yarn lint-autofix` | o mesmo, com `--fix`                                                                                |
+| `yarn format`       | prettier com escrita em `src/`, `bin/` e nos arquivos de configuração da raiz                       |
+| `yarn format:check` | o mesmo, só verificando                                                                             |
+| `yarn fix-comments` | converte comentários `//` em `/** */`, pelo `dist/` (rode `yarn build` antes)                       |
 
 ### Testes
 
@@ -220,10 +227,10 @@ GraphQLModule.forRootAsync<ApolloFederationDriverConfig>({
 
 ### Observabilidade (OpenTelemetry)
 
-O módulo `mind-observability` liga traces e métricas do OpenTelemetry sem nenhuma linha de código no serviço, CommonJS ou ES module. Basta carregar o `mind-api-helpers/observability` no comando que inicia a aplicação:
+O módulo `mind-observability` liga traces e métricas do OpenTelemetry sem nenhuma linha de código no serviço, CommonJS ou ES module. Basta carregar o `mind-api-helpers/bin/observability` no comando que inicia a aplicação:
 
 ```bash
-node -r mind-api-helpers/observability dist/main.js
+node -r mind-api-helpers/bin/observability dist/main.js
 ```
 
 O comando `mind-observability`, instalado pelo pacote, faz o mesmo: `mind-observability dist/main.js`.
@@ -234,14 +241,14 @@ Ativação com `.env`, como ligar e desligar por ambiente, o que é instrumentad
 
 Cada script fica numa pasta própria em `src/mind-scripts/`, com um README que diz para que serve e como usar:
 
-| Script | Para que serve |
-| --- | --- |
-| [Guard de versão do Node](src/mind-scripts/node-version-guard/README.md) | encerra a aplicação com uma mensagem clara quando o Node está fora do `engines.node` do serviço; roda por import, `-r` ou pelo comando `mind-node-guard` |
-| [Conversão de comentários](src/mind-scripts/fix-comments/README.md) | converte em bloco `/** */` os comentários `//` de linha inteira do serviço; roda pelo comando `mind-fix-comments` |
-| [Gate de cobertura](src/mind-scripts/check-coverage/README.md) | compara a cobertura do PR com a da branch de base, com mínimos por métrica (80% de linhas e de branches por padrão) no `coverageThreshold.json` ou na linha de comando, e falha o build abaixo do piso; roda pelo comando `mind-check-coverage` |
-| [Conversão de imports relativos](src/mind-scripts/convert-relative-imports/README.md) | troca pelo alias do `tsconfig.json` os imports relativos de `src/` que algum alias cobre; roda pelo comando `mind-convert-relative-imports` |
-| [Limpeza de caminhos inválidos do ingress](src/mind-scripts/prune-ingress-paths/README.md) | remove do arquivo de ingress do Kubernetes os caminhos com nome de Service que o cluster recusaria, antes do `kubectl apply`; roda pelo comando `mind-prune-ingress-paths` |
-| [Verificador de dependências](src/mind-scripts/check-dependencies/README.md) | confere se o serviço alcança o MongoDB, o Redis, o RabbitMQ e as APIs HTTP declarados no `dependencyChecks.json`, com a configuração do ambiente e sem subir a aplicação; roda pelo comando `mind-check-dependencies` |
+| Script                                                                                     | Para que serve                                                                                                                                                                                                                                  |
+| ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Guard de versão do Node](src/mind-scripts/node-version-guard/README.md)                   | encerra a aplicação com uma mensagem clara quando o Node está fora do `engines.node` do serviço; roda por import, `-r` ou pelo comando `mind-node-guard`                                                                                        |
+| [Conversão de comentários](src/mind-scripts/fix-comments/README.md)                        | converte em bloco `/** */` os comentários `//` de linha inteira do serviço; roda pelo comando `mind-fix-comments`                                                                                                                               |
+| [Gate de cobertura](src/mind-scripts/check-coverage/README.md)                             | compara a cobertura do PR com a da branch de base, com mínimos por métrica (80% de linhas e de branches por padrão) no `coverageThreshold.json` ou na linha de comando, e falha o build abaixo do piso; roda pelo comando `mind-check-coverage` |
+| [Conversão de imports relativos](src/mind-scripts/convert-relative-imports/README.md)      | troca pelo alias do `tsconfig.json` os imports relativos de `src/` que algum alias cobre; roda pelo comando `mind-convert-relative-imports`                                                                                                     |
+| [Limpeza de caminhos inválidos do ingress](src/mind-scripts/prune-ingress-paths/README.md) | remove do arquivo de ingress do Kubernetes os caminhos com nome de Service que o cluster recusaria, antes do `kubectl apply`; roda pelo comando `mind-prune-ingress-paths`                                                                      |
+| [Verificador de dependências](src/mind-scripts/check-dependencies/README.md)               | confere se o serviço alcança o MongoDB, o Redis, o RabbitMQ e as APIs HTTP declarados no `dependencyChecks.json`, com a configuração do ambiente e sem subir a aplicação; roda pelo comando `mind-check-dependencies`                           |
 
 ## Variáveis de ambiente
 
@@ -291,10 +298,10 @@ pelo `require(esm)` do Node.
 
 A biblioteca tem duas linhas mantidas em paralelo, e o serviço escolhe a sua pela tag:
 
-| Linha | Node | O que traz |
-| --- | --- | --- |
-| 1.x | anteriores ao 24 (`>=20.20.2`) | NestJS 10, Mongoose 7 ou 8, sem observabilidade |
-| 2.x | 24, a partir da 24.22 (`^24.22.0`) | NestJS 12, Mongoose 9 e o `mind-observability` |
+| Linha | Node                               | O que traz                                      |
+| ----- | ---------------------------------- | ----------------------------------------------- |
+| 1.x   | anteriores ao 24 (`>=20.20.2`)     | NestJS 10, Mongoose 7 ou 8, sem observabilidade |
+| 2.x   | 24, a partir da 24.22 (`^24.22.0`) | NestJS 12, Mongoose 9 e o `mind-observability`  |
 
 Uma correção que valha para as duas linhas sai numa versão de cada uma. Uma major nova do Node pede uma major nova
 da biblioteca.

@@ -9,33 +9,30 @@
   "private": true,
   "main": "dist/index.js",
   "bin": {
-    "mind-check-coverage": "check-coverage.js",
-    "mind-check-dependencies": "check-dependencies.js",
-    "mind-convert-relative-imports": "convert-relative-imports.js",
-    "mind-fix-comments": "fix-comments.js",
-    "mind-node-guard": "node-version-guard.js",
-    "mind-observability": "observability.js",
-    "mind-prune-ingress-paths": "prune-ingress-paths.js"
+    "mind-check-coverage": "bin/check-coverage.js",
+    "mind-check-dependencies": "bin/check-dependencies.js",
+    "mind-convert-relative-imports": "bin/convert-relative-imports.js",
+    "mind-fix-comments": "bin/fix-comments.js",
+    "mind-node-guard": "bin/node-version-guard.js",
+    "mind-observability": "bin/observability.js",
+    "mind-prune-ingress-paths": "bin/prune-ingress-paths.js"
   },
   "types": "dist/index.d.ts",
   "files": [
     "/dist",
-    "/observability.js",
-    "/node-version-guard.js",
-    "/fix-comments.js",
-    "/check-coverage.js",
-    "/convert-relative-imports.js",
-    "/prune-ingress-paths.js",
-    "/check-dependencies.js"
+    "/bin"
   ],
   "scripts": {
-    "lint": "eslint \"src/**/*.ts\"",
-    "lint-autofix": "eslint \"src/**/*.ts\" --fix",
+    "lint": "eslint \"src/**/*.ts\" \"bin/*.js\" \"*.{ts,mts}\"",
+    "lint-autofix": "eslint \"src/**/*.ts\" \"bin/*.js\" \"*.{ts,mts}\" --fix",
+    "format": "prettier --write \"src/**/*.ts\" \"bin/*.js\" \"*.{ts,mts}\"",
+    "format:check": "prettier --check \"src/**/*.ts\" \"bin/*.js\" \"*.{ts,mts}\"",
+    "fix-comments": "node bin/fix-comments.js",
     "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js",
     "prebuild": "rimraf dist/*",
     "build": "tsc -p tsconfig.build.json",
     "preinstall": "yarn --ignore-scripts",
-    "postinstall": "yarn build"
+    "postinstall": "yarn build && husky"
   },
   "dependencies": {
     "@opentelemetry/api": "^1.10.0",
@@ -53,6 +50,8 @@
   },
   "devDependencies": {
     "@apollo/server": "5.5.1",
+    "@commitlint/cli": "21.2.2",
+    "@commitlint/config-conventional": "21.2.2",
     "@nestjs/apollo": "14.0.3",
     "@nestjs/common": "12.1.2",
     "@nestjs/core": "12.1.2",
@@ -73,8 +72,10 @@
     "eslint-config-prettier": "9.0.0",
     "eslint-plugin-prettier": "5.0.0",
     "graphql-type-json": "0.3.2",
+    "husky": "9.1.7",
     "ioredis": "5.3.2",
     "jest": "30.5.2",
+    "lint-staged": "17.5.0",
     "mongoose": "9.11.0",
     "nest-winston": "2.0.0",
     "path-to-regexp": "8.4.2",

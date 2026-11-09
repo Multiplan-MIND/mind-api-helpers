@@ -34,11 +34,14 @@ As métricas são as do summary: `lines`, `statements`, `functions` e `branches`
 
    ```json
    {
+     "$comment": "Mínimos de cobertura do comando mind-check-coverage",
      "lines": 90,
      "branches": 80,
      "enforceBeforeV1": true
    }
    ```
+
+   Como o JSON não aceita comentário, a chave `$comment` fica reservada para um texto livre, ignorado pelo comando.
 
 3. O padrão de 80% de linhas e 80% de branches, aplicado só quando nenhuma das fontes acima define mínimo.
 

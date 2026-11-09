@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 
+import { COMMENT_KEY } from './constants';
 import { DependencyDefinition } from './dependency-definition';
 import { isPlainObject } from './fields';
 
@@ -59,7 +60,12 @@ export function readDependencyConfig(
 
   if (!isPlainObject(content)) throw new Error(`${filePath} must hold a JSON object`);
 
-  const entries = Object.entries(content).map(([dependency, value]) =>
+  const { [COMMENT_KEY]: comment, ...dependencies } = content;
+  if (comment !== undefined && typeof comment !== 'string') {
+    throw new Error(`${COMMENT_KEY} in ${filePath} must be a string`);
+  }
+
+  const entries = Object.entries(dependencies).map(([dependency, value]) =>
     parseEntry(dependency, value, filePath, definitions),
   );
   if (entries.length === 0) throw new Error(`${filePath} declares no dependency`);

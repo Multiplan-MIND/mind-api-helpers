@@ -12,6 +12,9 @@ export const DEFAULT_THRESHOLDS: CoveragePercentages = { lines: 80, branches: 80
 /** Lido da raiz do serviço quando existe e o `--config` não aponta outro arquivo. */
 export const THRESHOLD_FILE_NAME = 'coverageThreshold.json';
 
+/** Chave da raiz que o JSON de configuração reserva para um comentário em texto, já que o formato não aceita `//`. */
+export const COMMENT_KEY = '$comment';
+
 /** Versão maior a partir da qual o gate reprova por padrão; abaixo dela o resultado é só informativo. */
 export const ENFORCED_MAJOR_VERSION = 1;
 
