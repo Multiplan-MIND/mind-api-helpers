@@ -22,6 +22,11 @@ module.exports = {
         '@typescript-eslint/no-require-imports': 'off',
       },
     },
+    {
+      // Configurações do husky na raiz: ficam fora do tsconfig, que só inclui `src/`.
+      files: ['commitlint.config.ts', 'lint-staged.config.mts'],
+      parserOptions: { project: null },
+    },
   ],
   rules: {
     '@typescript-eslint/interface-name-prefix': 'off',
