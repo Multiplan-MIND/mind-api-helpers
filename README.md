@@ -241,6 +241,7 @@ Cada script fica numa pasta própria em `src/mind-scripts/`, com um README que d
 | [Gate de cobertura](src/mind-scripts/check-coverage/README.md) | compara a cobertura do PR com a da branch de base, com mínimos por métrica (80% de linhas e de branches por padrão) no `coverageThreshold.json` ou na linha de comando, e falha o build abaixo do piso; roda pelo comando `mind-check-coverage` |
 | [Conversão de imports relativos](src/mind-scripts/convert-relative-imports/README.md) | troca pelo alias do `tsconfig.json` os imports relativos de `src/` que algum alias cobre; roda pelo comando `mind-convert-relative-imports` |
 | [Limpeza de caminhos inválidos do ingress](src/mind-scripts/prune-ingress-paths/README.md) | remove do arquivo de ingress do Kubernetes os caminhos com nome de Service que o cluster recusaria, antes do `kubectl apply`; roda pelo comando `mind-prune-ingress-paths` |
+| [Verificador de dependências](src/mind-scripts/check-dependencies/README.md) | confere se o serviço alcança o MongoDB, o Redis, o RabbitMQ e as APIs HTTP declarados no `dependencyChecks.json`, com a configuração do ambiente e sem subir a aplicação; roda pelo comando `mind-check-dependencies` |
 
 ## Variáveis de ambiente
 
@@ -262,7 +263,7 @@ Quase tudo o que o código importa em tempo de execução (`mongoose`, `ioredis`
 `devDependencies`. As `peerDependencies` declaram o que o serviço precisa ter instalado: `@nestjs/common`
 ^12, `@nestjs/graphql` ^14, `@nestjs/apollo` ^14, `@apollo/server` ^5, `graphql` ^16.11, `nest-winston` ^2,
 `winston` ^3, `graphql-type-json`, `ioredis`, `mongoose` ^9, `reflect-metadata` (0.1 ou 0.2) e
-`@as-integrations/express5` ^1.1.2. Por causa dessas faixas, a biblioteca só serve para serviços já no NestJS 12.
+`@as-integrations/express5` ^1.1.2, além do `amqplib` ^0.10, opcional, usado só pelo verificador de dependências. Por causa dessas faixas, a biblioteca só serve para serviços já no NestJS 12.
 Na prática, `mongoose`, `@nestjs/common`,
 `@nestjs/graphql`, `@apollo/server`, `winston`, `nest-winston`, `ioredis`, `graphql-type-json` e
 `reflect-metadata` são resolvidos a partir de `node_modules/mind-api-helpers/node_modules` (a cópia aninhada
