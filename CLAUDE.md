@@ -23,6 +23,8 @@ yarn install                              # see the install cycle warning below
 yarn build                                # tsc -> dist/ (prebuild wipes dist via rimraf)
 yarn lint                                 # eslint (prettier runs as an eslint rule)
 yarn lint-autofix
+yarn format                               # prettier --write over src/, bin/ and the root config files
+yarn fix-comments                         # turns // comments into /** */; runs from dist/, so build first
 yarn test                                 # node --experimental-vm-modules jest; config in jest.config.json
 yarn test src/mind-helpers               # one directory
 yarn test -t 'should preserve subclasses' # one test by name
@@ -32,6 +34,8 @@ There is no watch/coverage script; use `yarn test --watch` / `--coverage` direct
 under `node --experimental-vm-modules`; without the flag every suite that imports `@nestjs/*` fails with
 `Must use import to load ES Module` (NestJS 12 ships ESM only). `.vscode/launch.json` provides an
 "API Helpers - Jest" debug configuration (nvm `runtimeVersion` 24, same flag in `runtimeArgs`).
+
+Git hooks (husky, same layout as `mind-api-concierge`): `pre-commit` runs `yarn lint-staged` (build, fix-comments, lint-autofix with `--max-warnings=0`, format, all over the whole project, then `git add -u`) and the full test suite; `commit-msg` runs commitlint with `commitlint.config.ts`. The build comes first because `fix-comments` runs from `dist/` and the build is also the type check. `convert-relative-imports` is not used here: this package has no tsconfig path aliases.
 
 ## How this library is distributed
 
@@ -46,9 +50,11 @@ install cycle in `package.json` is for, and it is the reason the dependency layo
 
 - `preinstall: yarn --ignore-scripts` — installs the dependency tree, `devDependencies` included, so
   `typescript` exists inside the consumer's `node_modules/mind-api-helpers`.
-- `postinstall: yarn build` — compiles `src/` to `dist/`, which `main`/`types` point at.
+- `postinstall: yarn build && husky` — compiles `src/` to `dist/`, which `main`/`types` point at, then installs the Git hooks.
 
 Consequences to keep in mind when touching `package.json`:
+
+- Never add a `prepare` script, and keep `husky` in the `postinstall`. With a `prepare` script, yarn 1 packs a git dependency through the `files` field instead of copying the repository, so `tsconfig.build.json` is left out and the consumer's `postinstall` build fails with TS5058. In a consumer there is no `.git` inside the package and husky 9 prints a notice and exits 0, so the hook install is harmless there.
 
 - Almost everything `src/` imports at **runtime** (`mongoose`, `ioredis`,
   `graphql-type-json`, `winston`, `nest-winston`, `@nestjs/*`, `@apollo/server`) sits in
