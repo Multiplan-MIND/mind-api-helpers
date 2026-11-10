@@ -73,7 +73,7 @@ export function getQuery(filters: FieldFilterInput[]) {
 }
 
 export function getOptions(opt?: QueryOptionsInput) {
-  const options: { limit?: number; skip?: number; sort?: any } = {};
+  const options: { limit?: number; skip?: number; sort?: Record<string, 1 | -1> } = {};
 
   if (!opt) {
     options.skip = 0;
@@ -82,10 +82,12 @@ export function getOptions(opt?: QueryOptionsInput) {
     if (opt.skip) options.skip = opt.skip;
     if (opt.limit) options.limit = opt.limit;
 
-    options.sort = [];
+    // A single object, not an array of single-field objects: Mongoose spreads an array `sort` option into
+    // sort(...), which takes one argument only. Key insertion order keeps the sort precedence
+    options.sort = {};
     if (opt.sort) {
       for (const s of opt.sort) {
-        options.sort.push({ [`${s.field}`]: s.sort === SortEnum.ASC ? 1 : -1 });
+        options.sort[s.field] = s.sort === SortEnum.ASC ? 1 : -1;
       }
     }
   }
