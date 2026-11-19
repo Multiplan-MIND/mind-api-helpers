@@ -7,6 +7,7 @@
  * - http.check
  *   - aceita a resposta 2xx e envia método e cabeçalhos
  *   - envia o corpo em objeto como JSON
+ *   - recusa o corpo fora do POST antes da requisição
  *   - recusa a resposta fora de 2xx
  *   - aceita qualquer status e redirecionamento quando o arquivo pede
  *   - confere o valor esperado em cada caminho do JSON
@@ -116,6 +117,15 @@ describe('http.check', () => {
         headers: expect.objectContaining({ 'content-type': 'application/json' }),
       }),
     );
+  });
+
+  it('recusa o corpo fora do POST antes da requisição', async () => {
+    const received = respondWith(200);
+
+    await expect(http.check(settings({ method: 'GET', body: { query: '{ __typename }' } }))).rejects.toThrow(
+      'body requires method POST | method=GET',
+    );
+    expect(received).not.toHaveBeenCalled();
   });
 
   it('recusa a resposta fora de 2xx', async () => {

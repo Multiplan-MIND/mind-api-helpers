@@ -22,6 +22,11 @@ export type HttpSettings = SettingsOf<typeof fields>;
  * que o host responde. Com qualquer resposta aceita, o redirecionamento também conta como resposta.
  */
 async function checkHttp(settings: HttpSettings): Promise<void> {
+  /** O fetch recusa corpo em GET e HEAD com erro de rede; a recusa aqui aponta o campo errado no arquivo. */
+  if (settings.body !== undefined && settings.method !== 'POST') {
+    throw new Error(`body requires method POST | method=${settings.method}`);
+  }
+
   const response = await request(settings.url, {
     ...buildInit(settings),
     redirect: settings.acceptAnyStatus ? 'manual' : 'error',

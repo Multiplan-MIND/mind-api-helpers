@@ -15,7 +15,7 @@ Faz uma requisição e exige status 2xx, sem seguir redirecionamento. Com `expec
 
 Só há métodos de leitura, porque o comando roda contra produção; o `POST` fica para consultas, como a do GraphQL. Credencial vai em `headers` ou `body`, que são secretos; a `url` não é, então token em query string só aparece mascarado se o mesmo valor também estiver num campo secreto.
 
-O `body` em objeto ou lista vai como JSON, com `content-type: application/json` quando os `headers` não definem outro; em texto, vai como está. O `fetch` recusa corpo em `GET` e `HEAD`.
+O `body` em objeto ou lista vai como JSON, com `content-type: application/json` quando os `headers` não definem outro; em texto, vai como está. O `body` só vale com `POST`; com `GET` ou `HEAD`, o comando recusa a dependência antes da requisição, com `body requires method POST | method=<método>`.
 
 O `acceptAnyStatus: true` aceita qualquer status, inclusive o redirecionamento, para provar só que o host responde, como na API que não tem rota de leitura.
 
