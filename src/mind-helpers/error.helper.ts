@@ -83,12 +83,15 @@ export function jsonError(err: unknown) {
       if (err?.response?.config?.data && err?.response?.config?.data instanceof Buffer)
         delete err?.response?.config?.data;
     }
+    /** Without `response` (timeout, ECONNREFUSED, DNS failure) only the error's own fields are serialized */
     json = {
-      config: err.response.config,
-      data: err.response.data,
-      headers: err.response.headers,
-      status: err.response.status,
-      statusText: err.response.statusText,
+      ...(err.response && {
+        config: err.response.config,
+        data: err.response.data,
+        headers: err.response.headers,
+        status: err.response.status,
+        statusText: err.response.statusText,
+      }),
       code: err.code,
       name: err.name,
       message: err.message,

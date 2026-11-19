@@ -1,6 +1,7 @@
 import { LoggerService } from '@nestjs/common';
 import { Span, trace } from '@opentelemetry/api';
 import { Test } from '@nestjs/testing';
+import { AxiosError } from 'axios';
 
 import { createMindLoggerProviders } from './mind-logger.providers';
 import { MindLoggerService } from './mind-logger.service';
@@ -168,6 +169,15 @@ describe('MindLoggerService', () => {
 
       /** side effect of jsonError: headers are deleted from the received object, not from a copy */
       expect(err.response.config.headers).toEqual({});
+    });
+
+    it('should log an axios error without response (timeout) by code, name and message', () => {
+      const err = new AxiosError('timeout of 5000ms exceeded', 'ECONNABORTED');
+
+      expect(() => mindLoggerService.error('Error in fetch', prefix, err)).not.toThrow();
+      expect(lastError().message).toContain('"code":"ECONNABORTED"');
+      expect(lastError().message).toContain('"message":"timeout of 5000ms exceeded"');
+      expect(lastError().stack).toBe(err.stack);
     });
   });
 
