@@ -9,6 +9,7 @@
   "private": true,
   "main": "dist/index.js",
   "bin": {
+    "mind-check-coverage": "check-coverage.js",
     "mind-fix-comments": "fix-comments.js",
     "mind-node-guard": "node-version-guard.js",
     "mind-observability": "observability.js"
@@ -18,7 +19,8 @@
     "/dist",
     "/observability.js",
     "/node-version-guard.js",
-    "/fix-comments.js"
+    "/fix-comments.js",
+    "/check-coverage.js"
   ],
   "scripts": {
     "lint": "eslint \"src/**/*.ts\"",
