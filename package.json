@@ -9,6 +9,7 @@
   "private": true,
   "main": "dist/index.js",
   "bin": {
+    "mind-fix-comments": "fix-comments.js",
     "mind-node-guard": "node-version-guard.js",
     "mind-observability": "observability.js"
   },
@@ -16,7 +17,8 @@
   "files": [
     "/dist",
     "/observability.js",
-    "/node-version-guard.js"
+    "/node-version-guard.js",
+    "/fix-comments.js"
   ],
   "scripts": {
     "lint": "eslint \"src/**/*.ts\"",
