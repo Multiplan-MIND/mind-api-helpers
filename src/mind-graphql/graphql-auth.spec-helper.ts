@@ -1,10 +1,12 @@
-// Shared by the GraphQL auth service specs. Each spec still needs its own
-//
-//   jest.mock('graphql-type-json', () => ({ __esModule: true, default: { name: 'JSON' } }));
-//
-// because Jest hoists `jest.mock` per file. The scalar is stubbed because `graphql` is deliberately not a
-// devDependency: consumers install this package with its devDependencies nested, and a second `graphql` copy there
-// breaks their schema (`Int` from another realm).
+/**
+ * Shared by the GraphQL auth service specs. Each spec still needs its own
+ *
+ *   jest.mock('graphql-type-json', () => ({ __esModule: true, default: { name: 'JSON' } }));
+ *
+ * because Jest hoists `jest.mock` per file. The scalar is stubbed because `graphql` is deliberately not a
+ * devDependency: consumers install this package with its devDependencies nested, and a second `graphql` copy there
+ * breaks their schema (`Int` from another realm).
+ */
 
 import { ApolloFederationDriverConfig } from '@nestjs/apollo';
 import { Federation2Config, SchemaFileConfig } from '@nestjs/graphql';
@@ -22,8 +24,10 @@ export const EMPTY_IDENTITY = {
   mindRequestInfo: expect.any(Object),
 };
 
-// Stand-in for `graphql`'s GraphQLError, loaded at call time by unauthenticatedError(); `graphql` is not installed
-// here (see above), so a spec that triggers a rejection mocks it with `jest.mock('graphql', ..., { virtual: true })`
+/**
+ * Stand-in for `graphql`'s GraphQLError, loaded at call time by unauthenticatedError(); `graphql` is not installed
+ * here (see above), so a spec that triggers a rejection mocks it with `jest.mock('graphql', ..., { virtual: true })`
+ */
 export class GraphQLErrorStub extends Error {
   extensions: Record<string, unknown>;
   constructor(message: string, options: { extensions?: Record<string, unknown> } = {}) {
@@ -43,21 +47,25 @@ export const resolveContext = async (
   return (options.context as (arg: unknown) => unknown)({ req: { ...req, headers } });
 };
 
-// The exact @link the subgraph declared under NestJS 10 (@nestjs/graphql 12); mind-api-router's gateway 2.4.x
-// rejects the newer defaults (v2.12, v2.14), so this line is part of the contract
+/**
+ * The exact @link the subgraph declared under NestJS 10 (@nestjs/graphql 12); mind-api-router's gateway 2.4.x
+ * rejects the newer defaults (v2.12, v2.14), so this line is part of the contract
+ */
 export const NEST_10_FEDERATION_LINK =
   'extend schema @link(url: "https://specs.apollo.dev/federation/v2.3", import: ["@composeDirective", "@extends", ' +
   '"@external", "@inaccessible", "@interfaceObject", "@key", "@override", "@provides", "@requires", "@shareable", "@tag"])';
 
-// Runs the @nestjs/graphql code that writes the federation `@link` into the subgraph type defs
-// (TypeDefsDecoratorFactory -> TypeDefsFederation2Decorator) with the service options.
-//
-// This covers the decorator step only, not the SDL a subgraph publishes: GraphQLFederationFactory, which reads
-// `autoSchemaFile.federation` and builds that SDL, imports `graphql` at module level, and `graphql` cannot be a
-// devDependency here. The factory is called with the federation major fixed at 2, and the import below relies on a
-// path the package `exports` map exposes (`./*`) although the class is not exported from the package root. The
-// published `@link` has to be checked outside this library: `{ _service { sdl } }` on a consuming service, or the
-// composition check of mind-api-router.
+/**
+ * Runs the @nestjs/graphql code that writes the federation `@link` into the subgraph type defs
+ * (TypeDefsDecoratorFactory -> TypeDefsFederation2Decorator) with the service options.
+ *
+ * This covers the decorator step only, not the SDL a subgraph publishes: GraphQLFederationFactory, which reads
+ * `autoSchemaFile.federation` and builds that SDL, imports `graphql` at module level, and `graphql` cannot be a
+ * devDependency here. The factory is called with the federation major fixed at 2, and the import below relies on a
+ * path the package `exports` map exposes (`./*`) although the class is not exported from the package root. The
+ * published `@link` has to be checked outside this library: `{ _service { sdl } }` on a consuming service, or the
+ * composition check of mind-api-router.
+ */
 export const federationLinkOf = (options: ApolloFederationDriverConfig) => {
   const { federation } = options.autoSchemaFile as SchemaFileConfig;
   const config = federation as Federation2Config;

@@ -8,8 +8,10 @@ import {
 } from '../../mind-graphql/entities/query.entities';
 import { getOptions, getQuery } from './query.helper';
 
-// `graphql` is deliberately not a devDependency: consumers install this package with its devDependencies nested,
-// and a second `graphql` copy there breaks their schema (`Int` from another realm). Stub the decorators instead.
+/**
+ * `graphql` is deliberately not a devDependency: consumers install this package with its devDependencies nested,
+ * and a second `graphql` copy there breaks their schema (`Int` from another realm). Stub the decorators instead.
+ */
 jest.mock('@nestjs/graphql', () => ({
   Field: () => () => undefined,
   InputType: () => () => undefined,
@@ -17,7 +19,7 @@ jest.mock('@nestjs/graphql', () => ({
   Int: 'Int',
 }));
 
-// The input types declare `Date`/`ObjectId`, but GraphQL delivers strings at runtime, which is what `getQuery` casts
+/** The input types declare `Date`/`ObjectId`, but GraphQL delivers strings at runtime, which is what `getQuery` casts */
 const filter = (field: string, op: OperationEnum, values: Record<string, unknown>): FieldFilterInput =>
   ({ field, op, ...values }) as unknown as FieldFilterInput;
 
@@ -44,8 +46,10 @@ describe('getQuery', () => {
   });
 
   describe('objectId values', () => {
-    // The ObjectId is built with the `mongoose` that resolves from this library, so its bson major must match the
-    // consumer's: that is why the peer range is a single Mongoose major
+    /**
+     * The ObjectId is built with the `mongoose` that resolves from this library, so its bson major must match the
+     * consumer's: that is why the peer range is a single Mongoose major
+     */
     it.each([
       ['eq', OperationEnum.eq, (value: unknown) => value],
       ['ne', OperationEnum.ne, (value: unknown) => ({ $ne: value })],

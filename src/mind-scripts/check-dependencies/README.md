@@ -19,6 +19,8 @@ O pacote instala o comando `mind-check-dependencies`. No `package.json` do servi
 
 O comando lê o `dependencyChecks.json` da raiz do serviço, ou o arquivo apontado por `--config=<arquivo>`, relativo ao diretório em que roda. No Dockerfile, o arquivo precisa ser copiado para a imagem junto com o `package.json`.
 
+Como o JSON não aceita comentário, a chave `$comment` da raiz fica reservada para um texto livre, ignorado pelo comando, que diz a quem abre o arquivo para que ele serve.
+
 ```bash
 yarn check-dependencies
 yarn check-dependencies --config=dependencyChecks.local.json
@@ -97,6 +99,7 @@ O comando lê o arquivo inteiro antes de testar qualquer dependência, e falha s
 | ------------------------------------- | ----------------------------------------------------------------------------- |
 | o arquivo não existe ou não é JSON    | `Failed to read <arquivo>: ...`                                               |
 | o conteúdo não é objeto ou está vazio | `<arquivo> must hold a JSON object`, `<arquivo> declares no dependency`       |
+| o `$comment` não é texto              | `$comment in <arquivo> must be a string`                                      |
 | a dependência não é objeto            | `"<nome>" in <arquivo> must be an object`                                     |
 | o tipo não existe                     | `type of "<nome>" in <arquivo> must be one of mongodb, redis, rabbitmq, http` |
 | o `enabled` não é texto               | `enabled of "<nome>" in <arquivo> must be a string`                           |

@@ -48,7 +48,7 @@ export interface ThrownError extends Error {
 export function toError(value: unknown): ThrownError {
   if (value instanceof Error) return value;
 
-  // Libs that reject with a plain object (drivers, HTTP clients) usually carry `message`
+  /** Libs that reject with a plain object (drivers, HTTP clients) usually carry `message` */
   const source = value as { message?: unknown; code?: unknown };
   if (typeof source?.message === 'string') {
     const error: ThrownError = new Error(source.message);
@@ -62,7 +62,7 @@ export function toError(value: unknown): ThrownError {
 function stringifyValue(value: unknown): string {
   if (typeof value === 'string') return value;
   try {
-    // `JSON.stringify` returns undefined for `undefined` and throws on circular references
+    /** `JSON.stringify` returns undefined for `undefined` and throws on circular references */
     return JSON.stringify(value) ?? String(value);
   } catch {
     return String(value);
@@ -95,7 +95,7 @@ export function jsonError(err: unknown) {
       stack: err.stack,
     };
   } else {
-    // preserves the original value: `Error` serializes as `{}`, but plain objects preserve their fields
+    /** preserves the original value: `Error` serializes as `{}`, but plain objects preserve their fields */
     json = err as object;
   }
   return json;

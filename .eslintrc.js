@@ -15,12 +15,17 @@ module.exports = {
   ignorePatterns: ['.eslintrc.js', '**/*.spec.ts', '**/*.spec-helper.ts'],
   overrides: [
     {
-      // Atalhos CommonJS da raiz do pacote: ficam fora do tsconfig e precisam de `require()` para `node -r` e `bin`.
-      files: ['*.js'],
+      // Atalhos CommonJS de `bin/`: ficam fora do tsconfig e precisam de `require()` para `node -r` e `bin`.
+      files: ['bin/*.js'],
       parserOptions: { project: null },
       rules: {
         '@typescript-eslint/no-require-imports': 'off',
       },
+    },
+    {
+      // Configurações do husky na raiz: ficam fora do tsconfig, que só inclui `src/`.
+      files: ['commitlint.config.ts', 'lint-staged.config.mts'],
+      parserOptions: { project: null },
     },
   ],
   rules: {

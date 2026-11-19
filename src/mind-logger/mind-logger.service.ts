@@ -30,7 +30,7 @@ export class MindLoggerService {
     this.loggerService?.verbose(message, this.context(prefix));
   }
 
-  // The span ids are read here, at the call site, because winston may format the line after the active span has ended.
+  /** The span ids are read here, at the call site, because winston may format the line after the active span has ended. */
   private context(prefix?: string) {
     const spanIds = currentSpanIds();
     return { module: this.module, prefix, ...(spanIds ?? {}) };

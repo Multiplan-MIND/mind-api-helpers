@@ -7,7 +7,7 @@ export interface RsaKeys {
   jwk: Record<string, any>;
 }
 
-// Gerar RSA 2048 custa ~100ms; os specs devem reutilizar o par entre testes
+/** Generating an RSA 2048 pair costs ~100 ms; specs should reuse the pair across tests */
 export function createRsaKeys(kid = 'test-kid'): RsaKeys {
   const { publicKey, privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
   const jwk = { ...publicKey.export({ format: 'jwk' }), kid, alg: 'RS256', use: 'sig' };

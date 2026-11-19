@@ -1,5 +1,5 @@
 import axios from 'axios';
-import * as jwkToPem from 'jwk-to-pem';
+import jwkToPem from 'jwk-to-pem';
 import * as jwt from 'jsonwebtoken';
 import { pathToRegexp } from 'path-to-regexp';
 import GraphQLJSON from 'graphql-type-json';
@@ -16,7 +16,7 @@ import {
 } from './graphql-auth.spec-helper';
 import { RsaKeys, createRedisMock, createRsaKeys, signToken } from './jwt.test-support';
 
-// Stubs the scalar and GraphQLError instead of installing `graphql`; see graphql-auth.spec-helper.ts for the reason
+/** Stubs the scalar and GraphQLError instead of installing `graphql`; see graphql-auth.spec-helper.ts for the reason */
 jest.mock('graphql-type-json', () => ({ __esModule: true, default: { name: 'JSON' } }));
 jest.mock('graphql', () => ({ GraphQLError: jest.requireActual('./graphql-auth.spec-helper').GraphQLErrorStub }), {
   virtual: true,
@@ -56,7 +56,7 @@ describe('GraphqlAuthJwksService', () => {
     await buildService();
   });
 
-  // SESSION_REQUIRE_SID is read once, at construction
+  /** SESSION_REQUIRE_SID is read once, at construction */
   const buildService = async () => {
     service = new GraphqlAuthJwksService(logger as any, redis as any);
     context = (await service.createGqlOptions()).context as any;

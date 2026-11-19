@@ -29,7 +29,7 @@ describe('MindLoggerService', () => {
     mindLoggerService = await moduleRef.resolve<MindLoggerService>(MindLoggerService);
     mindLoggerService.setModule('TestModule');
 
-    // replaces winston with mocks to inspect what the service forwards
+    /** replaces winston with mocks to inspect what the service forwards */
     winston = { log: jest.fn(), error: jest.fn(), warn: jest.fn(), debug: jest.fn(), verbose: jest.fn() };
     mindLoggerService['loggerService'] = winston as unknown as LoggerService;
   });
@@ -40,7 +40,7 @@ describe('MindLoggerService', () => {
 
       mindLoggerService.error('Error in save', prefix, err);
 
-      // Error has name/message as non-enumerable properties, so it serializes as {}
+      /** Error has name/message as non-enumerable properties, so it serializes as {} */
       expect(lastError().message).toBe('Error in save | {}');
       expect(lastError().stack).toBe(err.stack);
       expect(lastError().context).toEqual({ module: 'TestModule', prefix });
@@ -113,8 +113,10 @@ describe('MindLoggerService', () => {
       expect(lastError().message).toBe('Error in save');
     });
 
-    // known limitation: the `JSON.stringify` in error() does not handle circular references, so logging
-    // causes the flow to break. If the service handles this case, change to `not.toThrow()`.
+    /**
+     * known limitation: the `JSON.stringify` in error() does not handle circular references, so logging
+     * causes the flow to break. If the service handles this case, change to `not.toThrow()`.
+     */
     it('should throw on a circular reference, which is a known limitation', () => {
       const err: Record<string, unknown> = { code: 11000 };
       err.self = err;
@@ -164,7 +166,7 @@ describe('MindLoggerService', () => {
 
       mindLoggerService.error('Error in save', prefix, err);
 
-      // side effect of jsonError: headers are deleted from the received object, not from a copy
+      /** side effect of jsonError: headers are deleted from the received object, not from a copy */
       expect(err.response.config.headers).toEqual({});
     });
   });

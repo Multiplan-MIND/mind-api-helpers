@@ -26,9 +26,11 @@ function validIp(value: unknown): string | null {
   return typeof value === 'string' && isIP(value) ? value : null;
 }
 
-// `req.ip` is computed by Express from the `trust proxy` setting, so the service must configure it with
-// the number of proxies in front (e.g. `app.set('trust proxy', 1)`). X-Forwarded-For is never read
-// here: its first item is whatever the client sent.
+/**
+ * `req.ip` is computed by Express from the `trust proxy` setting, so the service must configure it with
+ * the number of proxies in front (e.g. `app.set('trust proxy', 1)`). X-Forwarded-For is never read
+ * here: its first item is whatever the client sent.
+ */
 export function extractIp(req: any): string | null {
   return validIp(req?.ip ?? req?.socket?.remoteAddress);
 }

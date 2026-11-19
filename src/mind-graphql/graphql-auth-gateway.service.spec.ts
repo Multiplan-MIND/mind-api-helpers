@@ -12,7 +12,7 @@ import {
 } from './graphql-auth.spec-helper';
 import { createRedisMock } from './jwt.test-support';
 
-// Stubs the scalar instead of installing `graphql`; see graphql-auth.spec-helper.ts for the reason
+/** Stubs the scalar instead of installing `graphql`; see graphql-auth.spec-helper.ts for the reason */
 jest.mock('graphql-type-json', () => ({ __esModule: true, default: { name: 'JSON' } }));
 
 describe('GraphqlAuthGatewayService', () => {

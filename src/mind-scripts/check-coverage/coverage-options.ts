@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 import {
+  COMMENT_KEY,
   CONFIG_OPTION,
   COVERAGE_METRICS,
   CoverageMetric,
@@ -98,7 +99,9 @@ function readThresholdFile(filePath: string): ThresholdSettings {
       settings.enforceBeforeV1 = value;
     } else if (key === 'enforceBeforeV1') {
       throw new Error(`enforceBeforeV1 in ${filePath} must be true or false`);
-    } else {
+    } else if (key === COMMENT_KEY && typeof value !== 'string') {
+      throw new Error(`${COMMENT_KEY} in ${filePath} must be a string`);
+    } else if (key !== COMMENT_KEY) {
       throw new Error(`Unknown key "${key}" in ${filePath}`);
     }
   }

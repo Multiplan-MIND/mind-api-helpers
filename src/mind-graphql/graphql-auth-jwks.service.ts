@@ -1,5 +1,5 @@
 import * as jwt from 'jsonwebtoken';
-import * as jwkToPem from 'jwk-to-pem';
+import jwkToPem from 'jwk-to-pem';
 import axios from 'axios';
 
 import { Inject, Injectable } from '@nestjs/common';
@@ -29,7 +29,7 @@ export class GraphqlAuthJwksService implements GqlOptionsFactory<ApolloFederatio
 
   async createGqlOptions(): Promise<ApolloFederationDriverConfig> {
     return buildMindGqlOptions({
-      // Serves /<any prefix>/graphql; Express 5 (path-to-regexp 8) requires a named wildcard
+      /** Serves /<any prefix>/graphql; Express 5 (path-to-regexp 8) requires a named wildcard */
       path: '/*splat/graphql',
       context: ({ req }) => this.mindHandleContext({ req }),
     });
@@ -96,9 +96,11 @@ export class GraphqlAuthJwksService implements GqlOptionsFactory<ApolloFederatio
     }
   }
 
-  // Token with `sid`: checks the global revocation key (fail-closed if Redis fails).
-  // Legacy token without the `sid` claim: accepted during the transition, unless SESSION_REQUIRE_SID is true.
-  // A `sid` that is present but not a non-empty string is never legacy: it is rejected.
+  /**
+   * Token with `sid`: checks the global revocation key (fail-closed if Redis fails).
+   * Legacy token without the `sid` claim: accepted during the transition, unless SESSION_REQUIRE_SID is true.
+   * A `sid` that is present but not a non-empty string is never legacy: it is rejected.
+   */
   private async assertSessionAllowed(sid: unknown, req: any, _log: string): Promise<void> {
     let check: SessionCheck;
     try {

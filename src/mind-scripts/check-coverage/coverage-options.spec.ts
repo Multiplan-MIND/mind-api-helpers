@@ -4,6 +4,7 @@
  *   - exige 80% de linhas e de branches quando nem o arquivo nem a linha de comando definem mínimo
  *   - lê os mínimos e o enforceBeforeV1 do coverageThreshold.json da raiz
  *   - lê o arquivo apontado pelo --config no lugar do da raiz
+ *   - ignora o $comment do arquivo
  *   - a flag de uma métrica vale sobre o arquivo só para ela
  *   - não liga o padrão quando alguma métrica é definida
  *   - aceita o --enforce-before-v1 em qualquer posição
@@ -22,6 +23,7 @@
  *   - recusa: com chave desconhecida no arquivo
  *   - recusa: com mínimo em texto no arquivo
  *   - recusa: com enforceBeforeV1 que não é booleano
+ *   - recusa: com $comment que não é texto
  */
 
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -71,6 +73,15 @@ describe('resolveCoverageOptions', () => {
     writeProjectFile('ci-thresholds.json', JSON.stringify({ branches: 70 }));
 
     expect(resolveOptions('--config=ci-thresholds.json', 'pr.json').thresholds).toEqual({ branches: 70 });
+  });
+
+  it('ignora o $comment do arquivo', () => {
+    writeProjectFile(
+      'coverageThreshold.json',
+      JSON.stringify({ $comment: 'Mínimos do mind-check-coverage', lines: 85 }),
+    );
+
+    expect(resolveOptions('pr.json')).toMatchObject({ thresholds: { lines: 85 } });
   });
 
   it('a flag de uma métrica vale sobre o arquivo só para ela', () => {
@@ -139,6 +150,12 @@ describe('resolveCoverageOptions', () => {
       files: { 'coverageThreshold.json': '{ "enforceBeforeV1": "yes" }' },
       args: ['pr.json'],
       message: 'enforceBeforeV1 in',
+    },
+    {
+      reason: 'com $comment que não é texto',
+      files: { 'coverageThreshold.json': '{ "$comment": ["a"] }' },
+      args: ['pr.json'],
+      message: '$comment in',
     },
   ])('recusa: $reason', ({ files, args, message }) => {
     Object.entries(files).forEach(([file, content]) => writeProjectFile(file, content));

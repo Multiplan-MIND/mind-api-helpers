@@ -21,8 +21,10 @@ export class GraphqlAuthGatewayService implements GqlOptionsFactory<ApolloFedera
     return buildMindGqlOptions({ context: ({ req }) => this.mindHandleContext({ req }) });
   }
 
-  // Behind the router: identity and client data come from headers the router sets on the subgraph request
-  // (`mind-request-ip` is the client IP the router resolved; the rest of the client headers are copied as-is).
+  /**
+   * Behind the router: identity and client data come from headers the router sets on the subgraph request
+   * (`mind-request-ip` is the client IP the router resolved; the rest of the client headers are copied as-is).
+   */
   private mindHandleContext({ req }) {
     const ctx = {
       mindUserId: null,
