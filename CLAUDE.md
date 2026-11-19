@@ -122,25 +122,20 @@ the logger.
   unlike a plain `Error`, whose `name`/`message` are non-enumerable and stringify to `{}`.
 - `jsonError(err)` — shapes a value for logging and **strips auth headers** (`Authorization`,
   `X-API-KEY`, `Apikey`, `x-api-key`, `WPS-API-KEY`) from axios errors. It deletes them from the
-  object it was given, not from a copy — a deliberate, test-asserted side effect. Anything not an
-  axios error is passed through unchanged.
+  object it was given, not from a copy — a deliberate, test-asserted side effect. An axios error
+  carries `config`, `data`, `headers`, `status` and `statusText` only when it has a `response`;
+  without one (timeout, `ECONNREFUSED`, DNS failure) only `code`, `name`, `message` and `stack` are
+  serialized. Anything not an axios error is passed through unchanged.
 - Known limitation, asserted in `mind-logger.service.spec.ts`: `MindLoggerService.error()` calls
   `JSON.stringify(jsonError(err))` without circular-reference handling, so logging a circular object
   throws. `toError()` itself is safe. If that is ever fixed, flip the test that expects the throw.
 
 ### `mind-graphql` + `mind-mongoose`
 
-`GraphqlAuthJwksService` and `GraphqlAuthGatewayService` are two interchangeable `GqlOptionsFactory`
-implementations for Apollo Federation 2. Both require the consumer to provide a `REDIS_CLIENT`
-provider (an `ioredis` client) and both build the same request context
-(`mindUserId`, `mindUserRoles`, `mindSessionExpiresIn`, `mindSessionId`, `mindRequestInfo`) — the JWKS one by verifying the `Bearer`
-token against a JWKS document fetched from `process.env.JWKS_URL` and cached in redis under
-`JWKS_PUBLIC_KEY` for a day; the gateway one by trusting the `mind-user-id` / `mind-user-roles` /
-`mind-session-expires-in` headers already injected upstream. Use the gateway variant behind the
-router, the JWKS variant at the edge. On failure (invalid token, revoked session, Redis down) the JWKS one
-**throws** a `GraphQLError` `UNAUTHENTICATED` (HTTP 401) via `unauthenticatedError()`; the gateway one never
-rejects (no identity headers → anonymous context). Never return `undefined` from the context: the Apollo driver
-replaces an empty context with `{ req }` and the request would continue as anonymous with status 200.
+`GraphqlAuthJwksService` and `GraphqlAuthGatewayService` are two interchangeable `GqlOptionsFactory` implementations for Apollo Federation 2. Both require the consumer to provide a `REDIS_CLIENT` provider (an `ioredis` client) and both build the same request context (`mindUserId`, `mindUserRoles`, `mindSessionExpiresIn`, `mindSessionId`, `mindRequestInfo`) — the JWKS one by verifying the `Bearer` token against a JWKS document fetched from `process.env.JWKS_URL`, with the public key of each `kid` cached in redis under `JWKS_PUBLIC_KEY:<kid>` for a day; the gateway one by trusting the `mind-user-id` / `mind-user-roles` / `mind-session-expires-in` headers already injected upstream. Use the gateway variant behind the router, the JWKS variant at the edge. On failure (invalid or expired token, revoked session, Redis down) the JWKS one **throws** a `GraphQLError` `UNAUTHENTICATED` (HTTP 401) via `unauthenticatedError()`; the gateway one never rejects (no identity headers → anonymous context). Never return `undefined` from the context: the Apollo driver replaces an empty context with `{ req }` and the request would continue as anonymous with status 200.
+
+The message is the client's contract (see the README, "Chaves do JWKS"): `Token expired` for the `exp` claim (`jwt.TokenExpiredError`) or a past `mindSessionExpiresIn`, `Invalid token` for everything else. `jwt.verify` checks the signature before `exp`, so keep the expiry branch after verification, or a forged token would get `Token expired`. Downloads are limited through the in-memory `jwksRefresh` (in-flight or settled promise plus a `performance.now()` timestamp), which also deduplicates concurrent lookups and serves the last download's keys when the redis write failed. Neither the client `kid`, the token, the keys nor the expiry claim go to the log; the `TokenExpiredError` is not logged because it carries `exp`, and redis or axios errors are logged only by name, message and code.
+
 `unauthenticatedError()` loads `graphql` with `require` at call time: `graphql` must stay out of
 `devDependencies` (a nested copy breaks Apollo's `instanceof GraphQLError`), so the specs stub it with
 `jest.mock('graphql', ..., { virtual: true })` (see `graphql-auth.spec-helper.ts`).

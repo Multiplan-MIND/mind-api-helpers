@@ -1,3 +1,5 @@
+import { AxiosError, AxiosHeaders } from 'axios';
+
 import { MindError, jsonError, toError } from './error.helper';
 
 describe('error.helper', () => {
@@ -68,6 +70,41 @@ describe('error.helper', () => {
         code: 11000,
         message: 'duplicate key',
       });
+    });
+
+    it('should serialize an axios error without response with its own fields only', () => {
+      const err = new AxiosError('timeout of 5000ms exceeded', 'ECONNABORTED', {
+        headers: new AxiosHeaders({ Authorization: 'Bearer must-not-leak' }),
+      });
+
+      const json = jsonError(err);
+
+      expect(json).toEqual({ code: 'ECONNABORTED', name: 'AxiosError', message: err.message, stack: err.stack });
+      expect(JSON.stringify(json)).not.toContain('must-not-leak');
+    });
+
+    it('should serialize an axios error with response without the sensitive headers', () => {
+      const config = { url: '/loyalty', headers: new AxiosHeaders({ Authorization: 'Bearer must-not-leak' }) };
+      const err = new AxiosError('Request failed with status code 401', 'ERR_BAD_REQUEST', config, null, {
+        config,
+        data: { error: 'unauthorized' },
+        headers: {},
+        status: 401,
+        statusText: 'Unauthorized',
+      });
+
+      expect(jsonError(err)).toEqual({
+        config: { url: '/loyalty', headers: expect.anything() },
+        data: { error: 'unauthorized' },
+        headers: {},
+        status: 401,
+        statusText: 'Unauthorized',
+        code: 'ERR_BAD_REQUEST',
+        name: 'AxiosError',
+        message: err.message,
+        stack: err.stack,
+      });
+      expect(JSON.stringify(jsonError(err))).not.toContain('must-not-leak');
     });
   });
 });
