@@ -6,16 +6,23 @@ module.exports = {
     sourceType: 'module',
   },
   plugins: ['@typescript-eslint/eslint-plugin'],
-  extends: [
-    'plugin:@typescript-eslint/recommended',
-    'plugin:prettier/recommended',
-  ],
+  extends: ['plugin:@typescript-eslint/recommended', 'plugin:prettier/recommended'],
   root: true,
   env: {
     node: true,
     jest: true,
   },
   ignorePatterns: ['.eslintrc.js', '**/*.spec.ts', '**/*.spec-helper.ts'],
+  overrides: [
+    {
+      // Atalhos CommonJS da raiz do pacote: ficam fora do tsconfig e precisam de `require()` para `node -r` e `bin`.
+      files: ['*.js'],
+      parserOptions: { project: null },
+      rules: {
+        '@typescript-eslint/no-require-imports': 'off',
+      },
+    },
+  ],
   rules: {
     '@typescript-eslint/interface-name-prefix': 'off',
     '@typescript-eslint/explicit-function-return-type': 'off',
@@ -24,14 +31,14 @@ module.exports = {
     'prettier/prettier': [
       'error',
       {
-        'arrowParens': 'always',
-        'endOfLine': 'auto',
-        'printWidth': 120,
-        'semi': true,
-        'singleQuote': true,
-        'tabWidth': 2,
-        'trailingComma': 'all'
-      }
-    ]
+        arrowParens: 'always',
+        endOfLine: 'auto',
+        printWidth: 120,
+        semi: true,
+        singleQuote: true,
+        tabWidth: 2,
+        trailingComma: 'all',
+      },
+    ],
   },
 };

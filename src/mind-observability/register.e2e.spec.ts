@@ -2,6 +2,7 @@
  * Testes executados:
  * - manda spans mascarados, métricas do processo e do runtime e o recurso do serviço a partir de um serviço CommonJS
  * - instrumenta os módulos carregados por import num serviço ES module
+ * - instrumenta o serviço iniciado pelo comando mind-observability, sem o -r (server.cjs e server.mjs)
  * - não manda nada e não carrega o SDK quando OTEL_SDK_DISABLED é true
  */
 
@@ -11,9 +12,9 @@ import { AddressInfo } from 'node:net';
 import { join, resolve } from 'node:path';
 
 /**
- * Ponta a ponta: compila a biblioteca, sobe um serviço real, CommonJS e ES module, com `-r register` e confere o
- * que chega a um receptor OTLP em memória. As outras specs simulam o SDK; esta falha quando uma atualização, uma troca
- * de dependência ou uma segunda cópia da API desliga a telemetria em silêncio.
+ * Ponta a ponta: compila a biblioteca, sobe um serviço real, CommonJS e ES module, com `-r register` ou pelo comando
+ * `mind-observability`, e confere o que chega a um receptor OTLP em memória. As outras specs simulam o SDK; esta falha
+ * quando uma atualização, uma troca de dependência ou uma segunda cópia da API desliga a telemetria em silêncio.
  */
 
 /** Configuração: formato OTLP/JSON lido pelo receptor e caminhos da compilação e do serviço de teste. */
@@ -141,6 +142,25 @@ describe('register (ponta a ponta)', () => {
     expect(spanOfKind(received, SPAN_KIND_SERVER)).toBeDefined();
     expect(spanOfKind(received, SPAN_KIND_CLIENT)).toBeDefined();
   }, 60_000);
+
+  /** O `runMain` escolhe entre CommonJS e ES module como o `node`, e cada serviço confirma por onde o SDK entrou. */
+  it.each([
+    ['server.cjs', 'sdk-loaded=true'],
+    ['server.mjs', 'esm-patched=true'],
+  ])(
+    'instrumenta o serviço iniciado pelo comando mind-observability, sem o -r (%s)',
+    async (service, loadedMarker) => {
+      const { received, stdout } = await runService(
+        [join(outDir, 'mind-observability/observability-command.js'), service],
+        {},
+      );
+
+      expect(stdout).toContain(loadedMarker);
+      expect(spanOfKind(received, SPAN_KIND_SERVER)).toBeDefined();
+      expect(spanOfKind(received, SPAN_KIND_CLIENT)).toBeDefined();
+    },
+    60_000,
+  );
 
   it('não manda nada e não carrega o SDK quando OTEL_SDK_DISABLED é true', async () => {
     const { received, stdout } = await runService(

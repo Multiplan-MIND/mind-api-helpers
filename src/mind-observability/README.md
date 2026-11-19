@@ -14,6 +14,14 @@ O mesmo comando vale para serviço CommonJS e para serviço em ES module (`"type
 
 Use `-r`, não `--import`: o resolvedor ESM do Node não completa a extensão, e `--import mind-api-helpers/observability` falha com `ERR_MODULE_NOT_FOUND`.
 
+O pacote também instala o comando `mind-observability`, que faz o mesmo sem o `-r`:
+
+```bash
+mind-observability dist/main.js
+```
+
+O comando inicia a observabilidade e depois roda o script no mesmo processo, do jeito que o `node` rodaria: CommonJS ou ES module, com os mesmos argumentos e o mesmo código de saída. Ele não aceita flags do Node, como o `--env-file-if-exists` abaixo; quando precisar de uma, use a forma com `-r`.
+
 Quando as variáveis estão num `.env`, o Node precisa carregá-lo antes do `register`, porque a aplicação só lê o arquivo depois:
 
 ```bash
@@ -23,7 +31,7 @@ nest start --exec "node --env-file-if-exists=.env -r mind-api-helpers/observabil
 
 O Node não sobrescreve uma variável já definida no ambiente do processo, e sem o arquivo só avisa `.env not found` e segue.
 
-No Dockerfile o comando vai no `CMD`. Evite o `NODE_OPTIONS`: a variável vale para todo processo Node do contêiner (`yarn`, CLI do Nest, migrations, scripts), e cada um subiria um SDK em nome do serviço. Nada que carregue `mongoose` ou `@nestjs/*` pode vir antes do `register`, porque as instrumentações só alteram um módulo ainda não carregado; por isso o `register` **não** é exportado pelo `src/index.ts`.
+No Dockerfile o comando vai no `CMD`. Com o `mind-observability`, use o caminho completo, `CMD ["node_modules/.bin/mind-observability", "dist/main.js"]`, porque o `node_modules/.bin` não fica no `PATH` do contêiner. Evite o `NODE_OPTIONS`: a variável vale para todo processo Node do contêiner (`yarn`, CLI do Nest, migrations, scripts), e cada um subiria um SDK em nome do serviço. Nada que carregue `mongoose` ou `@nestjs/*` pode vir antes do `register`, porque as instrumentações só alteram um módulo ainda não carregado; por isso o `register` **não** é exportado pelo `src/index.ts`.
 
 ## Ligar e desligar
 
@@ -125,8 +133,9 @@ A raiz do módulo guarda o que serve aos dois sinais, `tracing/` o que produz ou
 
 | Arquivo | O que é e para que serve |
 | --- | --- |
-| `observability.js` (raiz do pacote) | atalho que só carrega o `register` compilado, para o serviço usar `-r mind-api-helpers/observability` sem citar o `dist/` |
+| `observability.js` (raiz do pacote) | atalho para `-r mind-api-helpers/observability` e para o comando `mind-observability`, sem citar o `dist/`; pelo `-r` carrega o `register`, pelo comando carrega o `observability-command` |
 | `register.ts` | ponto de entrada carregado pelo `-r`; apenas chama `startObservability()` |
+| `observability-command.ts` | ponto de entrada do comando `mind-observability`; carrega o `register` e depois roda o script da aplicação no mesmo processo |
 | `start-observability.ts` | o switch: decide pelas variáveis se a telemetria liga e só então carrega o SDK, para um serviço desligado não pagar nada |
 | `observability-sdk.ts` | monta e inicia o `NodeSDK` com recurso, instrumentações, integrações do AI SDK, logger de erros de exportação e encerramento |
 | `esm-loader-hook.ts` | registra o hook síncrono do `import-in-the-middle`, que permite instrumentar módulos carregados por `import` |
