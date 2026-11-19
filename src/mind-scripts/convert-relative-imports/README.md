@@ -24,6 +24,20 @@ O pacote instala o comando `mind-convert-relative-imports`, que lê o `tsconfig.
 
 Rodado pelo `yarn`, o diretório é a raiz do serviço. O comando também pode entrar no `lint-staged`, antes do lint e do prettier. Ele percorre o `src/` inteiro e não só os arquivos em staged, então os arquivos convertidos fora do staged precisam de um `git add` próprio. Depois de rodar, revise as mudanças com `git diff`.
 
+## Pré-requisito
+
+O `tsc` não reescreve os `paths` no JavaScript que gera, então o serviço precisa resolver os aliases por conta própria antes de adotar o comando; sem isso o build passa, mas a aplicação falha ao subir e os testes falham, ambos com `Cannot find module '@...'`. Na execução, o `tsconfig-paths` registrado com o `baseUrl` apontado para a saída do build resolve os aliases, assim como o `tsc-alias` rodado depois do `tsc`; no Jest, o `moduleNameMapper` gerado dos mesmos `paths`, com o `prefix` levando do `rootDir` do Jest ao `baseUrl`, faz o mesmo:
+
+```json
+"start": "NODE_OPTIONS=\"-r tsconfig-paths/register\" TS_NODE_BASEURL=./dist nest start"
+```
+
+```ts
+import { pathsToModuleNameMapper } from 'ts-jest';
+
+moduleNameMapper: pathsToModuleNameMapper(compilerOptions.paths ?? {}, { prefix: '<rootDir>/' }),
+```
+
 ## Comportamento
 
 - Os aliases são os de pasta, terminados em `/*`, com o primeiro destino de cada um, em `dir/*` ou `*`, que é a própria base, a partir do `baseUrl` ou, sem ele, da pasta do `tsconfig.json`. Um alias exato, que aponta um único arquivo, não entra.
