@@ -168,25 +168,20 @@ Dois detalhes que costumam gerar dúvida:
 
 ### GraphQL
 
-`GraphqlAuthJwksService` e `GraphqlAuthGatewayService` são duas implementações intercambiáveis de
-`GqlOptionsFactory` para Apollo Federation 2. As duas montam o mesmo contexto de requisição
-(`mindUserId`, `mindUserRoles`, `mindSessionExpiresIn`, `mindSessionId` e `mindRequestInfo`, ver
-[Sessões e revogação](#sessões-e-revogação)):
+`GraphqlAuthJwksService` e `GraphqlAuthGatewayService` são duas implementações intercambiáveis de `GqlOptionsFactory` para Apollo Federation 2. As duas montam o mesmo contexto de requisição (`mindUserId`, `mindUserRoles`, `mindSessionExpiresIn`, `mindSessionId` e `mindRequestInfo`, ver [Sessões e revogação](#sessões-e-revogação)):
 
-- **JWKS** — valida o token `Bearer` contra o JWKS baixado de `JWKS_URL`, com a chave pública em cache
-  no redis. Use na borda, onde o token chega do cliente.
-- **Gateway** — confia nos headers `mind-user-id`, `mind-user-roles`, `mind-session-expires-in` e
-  `mind-session-id` já injetados por quem está na frente (o router), além de `mind-request-ip`, o IP do
-  cliente. Use atrás do router.
+- **JWKS** — valida o token `Bearer` contra o JWKS baixado de `JWKS_URL`, com a chave pública de cada `kid` em cache no redis (ver [Chaves do JWKS](#chaves-do-jwks)). Use na borda, onde o token chega do cliente.
+- **Gateway** — confia nos headers `mind-user-id`, `mind-user-roles`, `mind-session-expires-in` e `mind-session-id` já injetados por quem está na frente (o router), além de `mind-request-ip`, o IP do cliente. Use atrás do router.
 
-Ambas exigem que o serviço forneça um provider `REDIS_CLIENT` (um client `ioredis`). No
-`GraphqlAuthJwksService`, em caso de falha (token inválido, sessão revogada, redis fora) o contexto
-**lança** um `GraphQLError` `UNAUTHENTICATED` com status HTTP 401. Não pode ser `undefined`: o driver do
-Apollo troca o contexto vazio por `{ req }` e a requisição seguiria como anônima, com status 200. O
-`GraphQLError` vem do `graphql` do **serviço** (peer dependency, carregado com `require` na hora do erro): o
-`graphql` não é devDependency da biblioteca, porque uma cópia aninhada faria o `instanceof` do Apollo falhar.
-O `GraphqlAuthGatewayService` não rejeita: sem os headers de identidade o contexto é anônimo. Sem token, o
-contexto também é anônimo (campos `null`), como antes. Token com a sessão apenas expirada também segue anônimo.
+Ambas exigem que o serviço forneça um provider `REDIS_CLIENT` (um client `ioredis`). No `GraphqlAuthJwksService`, em caso de falha (token inválido ou vencido, sessão revogada, redis fora) o contexto **lança** um `GraphQLError` `UNAUTHENTICATED` com status HTTP 401. Não pode ser `undefined`: o driver do Apollo troca o contexto vazio por `{ req }` e a requisição seguiria como anônima, com status 200. O `GraphQLError` vem do `graphql` do **serviço** (peer dependency, carregado com `require` na hora do erro): o `graphql` não é devDependency da biblioteca, porque uma cópia aninhada faria o `instanceof` do Apollo falhar. O `GraphqlAuthGatewayService` não rejeita: sem os headers de identidade o contexto é anônimo. Sem token, o contexto também é anônimo (campos `null`).
+
+No `GraphqlAuthJwksService`, o token vencido, pelo claim `exp` ou pelo `mindSessionExpiresIn`, responde com a mensagem `Token expired`, que diz ao cliente para renovar a sessão e refazer a chamada; as demais falhas do token (assinatura, algoritmo, `kid` ausente ou desconhecido, formato) respondem `Invalid token`. O vencimento só é avaliado depois da assinatura, então um token forjado nunca recebe `Token expired`. Em produção, a resposta a uma chamada com token vencido é um HTTP 401 com este corpo (fora de produção o Apollo acrescenta o `stacktrace` em `extensions`):
+
+```json
+{ "errors": [{ "message": "Token expired", "extensions": { "code": "UNAUTHENTICATED" } }] }
+```
+
+Um token de assinatura válida sem o claim `mindSessionExpiresIn`, ou com ele vazio (`null`, `""`, `0`, `false`), não é rejeitado: a requisição segue com o contexto anônimo, com os mesmos campos `null` de uma chamada sem token, e a sessão não é consultada no redis, nem com `SESSION_REQUIRE_SID` ligado. A assinatura, o `kid` e o claim `exp`, quando presente, continuam verificados antes, então esse token também responde `Token expired` ou `Invalid token` nos casos descritos acima.
 
 As duas exigem NestJS 12, `@nestjs/graphql`/`@nestjs/apollo` 14, `nest-winston` 2 e `@apollo/server` 5 (ver
 `peerDependencies`) e compartilham as opções montadas por `buildMindGqlOptions`
@@ -226,6 +221,10 @@ GraphQLModule.forRootAsync<ApolloFederationDriverConfig>({
   useClass: process.env.GRAPHQL_SERVICE === 'jwks' ? GraphqlAuthJwksService : GraphqlAuthGatewayService,
 });
 ```
+
+#### Chaves do JWKS
+
+O `GraphqlAuthJwksService` escolhe a chave pelo `kid` do cabeçalho do token e guarda a chave pública de cada `kid` no redis, sob `JWKS_PUBLIC_KEY:<kid>`, por um dia. Um `kid` sem cache dispara o download do JWKS de `JWKS_URL`, com timeout de 5 s, e todas as chaves RSA de assinatura do documento que tenham `kid` único vão para o cache, não só a pedida, para que um `kid` inventado não esconda uma chave nova legítima. Cada réplica baixa o JWKS no máximo uma vez por minuto: dentro desse intervalo, as requisições concorrentes ou seguintes usam o resultado do último download, inclusive a falha, de modo que uma chave publicada no JWKS logo depois de um download só é aceita no download seguinte. Uma chave retirada do JWKS continua aceita em todas as réplicas que usam o mesmo redis e o mesmo `keyPrefix` até a entrada dela vencer, o que leva até um dia; para revogá-la na hora, apague `JWKS_PUBLIC_KEY:<kid>`, com o `keyPrefix` do serviço, no redis de cada serviço, e a réplica cujo último download é anterior à retirada ainda a aceita por até um minuto. Token sem `kid`, `kid` fora do JWKS e `kid` repetido no documento respondem `Invalid token`, porque não há como escolher a chave sem ambiguidade. Nem o token, nem as chaves, nem o `kid` recebido do cliente vão para o log.
 
 ### Observabilidade (OpenTelemetry)
 
@@ -322,7 +321,7 @@ A biblioteca lê as quatro variáveis abaixo, e quem as define é o serviço que
 | `SESSION_REQUIRE_SID` | `true`/`1` rejeita tokens sem `sid`; `false`/`0`/vazio os aceita (sem diferenciar maiúsculas, com trim); outro valor falha no boot |
 
 O acesso ao redis não vem de variável: chega pelo provider `REDIS_CLIENT`, configurado no serviço.
-A chave pública fica em cache sob `JWKS_PUBLIC_KEY` por um dia.
+A chave pública de cada `kid` fica em cache sob `JWKS_PUBLIC_KEY:<kid>` por um dia (ver [Chaves do JWKS](#chaves-do-jwks)).
 
 ## Dependências e ambientes
 
