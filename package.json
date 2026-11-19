@@ -10,6 +10,7 @@
   "main": "dist/index.js",
   "bin": {
     "mind-check-coverage": "check-coverage.js",
+    "mind-convert-relative-imports": "convert-relative-imports.js",
     "mind-fix-comments": "fix-comments.js",
     "mind-node-guard": "node-version-guard.js",
     "mind-observability": "observability.js"
@@ -20,7 +21,8 @@
     "/observability.js",
     "/node-version-guard.js",
     "/fix-comments.js",
-    "/check-coverage.js"
+    "/check-coverage.js",
+    "/convert-relative-imports.js"
   ],
   "scripts": {
     "lint": "eslint \"src/**/*.ts\"",
