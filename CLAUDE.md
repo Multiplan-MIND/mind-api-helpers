@@ -28,7 +28,7 @@ yarn test src/mind-helpers               # one directory
 yarn test -t 'should preserve subclasses' # one test by name
 ```
 
-There is no watch/coverage script; use `yarn test --watch` / `--coverage` directly. The `test` script runs Jest
+`yarn test:cov` runs jest with coverage and fails below the 90% line `coverageThreshold` in `jest.config.json` (plain `yarn test` is not affected); use `yarn test --watch` for watch mode. The `test` script runs Jest
 under `node --experimental-vm-modules`; without the flag every suite that imports `@nestjs/*` fails with
 `Must use import to load ES Module` (NestJS 12 ships ESM only). `.vscode/launch.json` provides an
 "API Helpers - Jest" debug configuration (nvm `runtimeVersion` 24, same flag in `runtimeArgs`).
@@ -75,7 +75,8 @@ Consequences to keep in mind when touching `package.json`:
 
 ## Architecture
 
-Dependency direction is one-way: `mind-helpers` ← `mind-logger` ← `mind-graphql` / `mind-mongoose`.
+Dependency direction is one-way: `mind-helpers` ← `mind-logger` and `mind-helpers` ← `mind-session`, both consumed
+by `mind-graphql`, which `mind-mongoose` reads for the query input types.
 `mind-helpers` imports nothing internal, so it is the safe place for shared primitives. `mind-logger` also
 imports `mind-observability/tracing/active-span`, a leaf that depends only on `@opentelemetry/api`.
 
@@ -126,12 +127,31 @@ the logger.
 `GraphqlAuthJwksService` and `GraphqlAuthGatewayService` are two interchangeable `GqlOptionsFactory`
 implementations for Apollo Federation 2. Both require the consumer to provide a `REDIS_CLIENT`
 provider (an `ioredis` client) and both build the same request context
-(`mindUserId`, `mindUserRoles`, `mindSessionExpiresIn`) — the JWKS one by verifying the `Bearer`
+(`mindUserId`, `mindUserRoles`, `mindSessionExpiresIn`, `mindSessionId`, `mindRequestInfo`) — the JWKS one by verifying the `Bearer`
 token against a JWKS document fetched from `process.env.JWKS_URL` and cached in redis under
 `JWKS_PUBLIC_KEY` for a day; the gateway one by trusting the `mind-user-id` / `mind-user-roles` /
 `mind-session-expires-in` headers already injected upstream. Use the gateway variant behind the
-router, the JWKS variant at the edge. On failure both return `undefined` instead of throwing, which
-leaves the resolvers with no context.
+router, the JWKS variant at the edge. On failure (invalid token, revoked session, Redis down) the JWKS one
+**throws** a `GraphQLError` `UNAUTHENTICATED` (HTTP 401) via `unauthenticatedError()`; the gateway one never
+rejects (no identity headers → anonymous context). Never return `undefined` from the context: the Apollo driver
+replaces an empty context with `{ req }` and the request would continue as anonymous with status 200.
+`unauthenticatedError()` loads `graphql` with `require` at call time: `graphql` must stay out of
+`devDependencies` (a nested copy breaks Apollo's `instanceof GraphQLError`), so the specs stub it with
+`jest.mock('graphql', ..., { virtual: true })` (see `graphql-auth.spec-helper.ts`).
+
+### `mind-session`
+
+- Revocation: `mind:session:revoked:<sid>` is a **global** key (ignores the service `keyPrefix`), so the
+  helpers use `EVAL` with the key in `ARGV` (`numkeys = 0`). That assumes **standalone Redis without
+  per-prefix ACL** (the current topology); Redis Cluster or ACLs would break it (see README, "Premissas do
+  redis"). TTL = remaining session time + 60 s clock-skew margin. `markSessionsRevoked` returns
+  `{ revoked, failed }` instead of throwing on the first error.
+- `SESSION_REQUIRE_SID` is parsed once in the `GraphqlAuthJwksService` constructor and only accepts
+  `true|false|1|0`; any other value throws at boot (fail-open misconfiguration is not allowed). A token whose
+  `sid` claim exists but is not a non-empty string is rejected, not treated as legacy.
+- `extractIp()` uses `req.ip` (needs the service's `trust proxy`) and validates with `net.isIP()`. It must
+  never read the first `X-Forwarded-For` item: that is client-controlled. Behind the router the gateway
+  service reads `mind-request-ip`, which the router sets.
 
 Both share their options through `buildMindGqlOptions` (`graphql-options.builder.ts`); a service only adds its
 `context` (and the JWKS one its `path`), so a compatibility option is changed there, once. Required versions, the
@@ -175,14 +195,14 @@ Each script lives in its own folder, `src/mind-scripts/<script>/`, with its code
 - **Code is English** (identifiers, file names, branch names, log/error strings), per the "Idioma"
   section of the README; the READMEs (the main one, `src/mind-observability/README.md` and the one in each
   `src/mind-scripts/<script>/` folder) are the only documents written in pt-BR.
-- **Comments and test descriptions use one language per module.** `mind-logger`, `mind-helpers`, `mind-graphql` and
-  `mind-mongoose` use English. `mind-observability` and `mind-scripts` use Brazilian Portuguese, with accents: every explanatory comment
-  in `.ts`, `.js`, `.cjs` and `.mjs` is a `/** */` block, never `//`; it states only the non-obvious why, briefly; no
-  full JSDoc with `@param`/`@returns`. Its spec files open with a `Testes executados:` block listing every `it`
-  (nested like the `describe`s), then the imports, then `/** Configuração */`, `/** Fixtures */`,
-  `/** Factories/helpers */` and `/** Testes */` sections as needed, with `describe`/`it` descriptions in Portuguese;
-  the list is updated whenever an `it` changes. When touching a file, write in its module's language and translate
-  what is in the other one.
+- **Comments and test descriptions use one language per module.** `mind-logger`, `mind-helpers`, `mind-graphql`,
+  `mind-mongoose` and `mind-session` use English. `mind-observability` and `mind-scripts` use Brazilian Portuguese, with
+  accents: every explanatory comment in `.ts`, `.js`, `.cjs` and `.mjs` is a `/** */` block, never `//`; it states only
+  the non-obvious why, briefly; no full JSDoc with `@param`/`@returns`. Its spec files open with a `Testes executados:`
+  block listing every `it` (nested like the `describe`s), then the imports, then `/** Configuração */`,
+  `/** Fixtures */`, `/** Factories/helpers */` and `/** Testes */` sections as needed, with `describe`/`it`
+  descriptions in Portuguese; the list is updated whenever an `it` changes. When touching a file, write in its module's
+  language and translate what is in the other one.
 - **Documentation and comments describe the current state, timelessly.** No reference to the plan, review or request
   behind a change, and no transition narrative ("no longer", "used to", "now does"): readers of the repository have
   none of that context. A rejected alternative is stated as a design property ("X would break Y because"). The
