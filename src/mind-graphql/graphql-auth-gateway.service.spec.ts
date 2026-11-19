@@ -7,7 +7,7 @@ import {
   EMPTY_IDENTITY,
   federationLinkOf,
   LoggerMock,
-  NEST_10_FEDERATION_LINK,
+  MIND_FEDERATION_LINK,
   resolveContext,
 } from './graphql-auth.spec-helper';
 import { createRedisMock } from './jwt.test-support';
@@ -40,10 +40,10 @@ describe('GraphqlAuthGatewayService', () => {
       expect(options.context).toEqual(expect.any(Function));
     });
 
-    it('should declare the NestJS 10 federation link (v2.3, 11 directives) in the generated subgraph SDL', async () => {
+    it('should declare the federation v2.14 link (13 directives) in the generated subgraph SDL', async () => {
       const options = await service.createGqlOptions();
 
-      expect(federationLinkOf(options)).toBe(NEST_10_FEDERATION_LINK);
+      expect(federationLinkOf(options)).toBe(MIND_FEDERATION_LINK);
     });
   });
 

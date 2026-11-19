@@ -48,12 +48,13 @@ export const resolveContext = async (
 };
 
 /**
- * The exact @link the subgraph declared under NestJS 10 (@nestjs/graphql 12); mind-api-router's gateway 2.4.x
- * rejects the newer defaults (v2.12, v2.14), so this line is part of the contract
+ * The exact @link every subgraph declares; mind-api-router's @apollo/gateway composes it, so this line is part of the
+ * contract
  */
-export const NEST_10_FEDERATION_LINK =
-  'extend schema @link(url: "https://specs.apollo.dev/federation/v2.3", import: ["@composeDirective", "@extends", ' +
-  '"@external", "@inaccessible", "@interfaceObject", "@key", "@override", "@provides", "@requires", "@shareable", "@tag"])';
+export const MIND_FEDERATION_LINK =
+  'extend schema @link(url: "https://specs.apollo.dev/federation/v2.14", import: ["@composeDirective", "@context", ' +
+  '"@extends", "@external", "@fromContext", "@inaccessible", "@interfaceObject", "@key", "@override", "@provides", ' +
+  '"@requires", "@shareable", "@tag"])';
 
 /**
  * Runs the @nestjs/graphql code that writes the federation `@link` into the subgraph type defs
