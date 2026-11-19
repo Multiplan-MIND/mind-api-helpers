@@ -197,22 +197,11 @@ coerção de variáveis respondem 400, o padrão do Apollo Server 5. O resolver 
 `requireResolversToMatchSchema` é `'warn'`: um serviço sem nenhum campo `JSON` recebe um aviso no boot em
 vez de falhar. Nas duas, `mindSessionExpiresIn` é um `Date`.
 
-O `@link` de federação que o subgraph declara fica fixo em `getMindFederationConfig()`
-(`getMindFederationConfig()` em `src/mind-graphql/graphql-federation.config.ts`, exportada pelo _barrel_; devolve
-uma cópia nova a cada chamada):
-`federation/v2.3` com as mesmas 11 diretivas que o NestJS 10 importava, na mesma ordem. Os padrões mais novos do
-`@nestjs/graphql` (v2.12 no 13, v2.14 no 14) não são compostos pelo `@apollo/gateway` 2.4.x do `mind-api-router`
-(`Invalid version ... for the federation feature`); a v2.3 é. Só suba essa versão junto com o gateway do router. Os
-specs dos dois serviços conferem a linha exata do `@link` gerado, com o helper compartilhado
-`src/mind-graphql/graphql-auth.spec-helper.ts` (fora do build e do lint, como os specs).
+O `@link` de federação que o subgraph declara fica fixo em `getMindFederationConfig()` (em `src/mind-graphql/graphql-federation.config.ts`, exportada pelo _barrel_; devolve uma cópia nova a cada chamada): `federation/v2.14`, que o `@apollo/gateway` do router precisa compor (versão 2.14 ou superior), com estas diretivas, em ordem alfabética: `@composeDirective`, `@context`, `@extends`, `@external`, `@fromContext`, `@inaccessible`, `@interfaceObject`, `@key`, `@override`, `@provides`, `@requires`, `@shareable` e `@tag`. As diretivas de autorização (`@authenticated`, `@requiresScopes`, `@policy`), as de controle de demanda (`@cost`, `@listSize`) e o `@cacheTag` ficam de fora do `@link`: só o GraphOS Router as aplica, e o `@apollo/gateway` comporia o subgraph ignorando-as, de modo que um campo marcado com `@authenticated` seguiria aberto. Sem a importação, a composição recusa o subgraph que usar uma delas pelo nome curto (`Unknown directive "@authenticated"`); o nome qualificado (`@federation__authenticated`) continua aceito e seria ignorado do mesmo jeito, por isso não deve ser usado. Os specs dos dois serviços conferem a linha exata do `@link` gerado, com o helper compartilhado `src/mind-graphql/graphql-auth.spec-helper.ts` (fora do build e do lint, como os specs).
 
-O pin só vale para quem usa estes serviços: **todo subgraph atrás do router deve usar o
-`getMindFederationConfig()`**, inclusive o serviço que monta o `GraphQLModule` direto, com
-`autoSchemaFile: { federation: getMindFederationConfig() }`. Com `federation: 2`, o subgraph publica o padrão do
-`@nestjs/graphql` 14 (`federation/v2.14`) e a composição no router falha. Os specs da biblioteca conferem o
-decorator do `@link`, não o SDL publicado: para esse, consulte `{ _service { sdl } }` no serviço. Enquanto o
-`@apollo/gateway` do router não subir, as diretivas mais novas da federação (`@authenticated`,
-`@requiresScopes`, `@policy`, `@cost`, `@listSize`) não ficam disponíveis nos subgraphs.
+**Regra de deploy: um subgraph na helpers 2.x só vai para um ambiente onde o router já componha com o `@apollo/gateway` 2.14 ou superior.** O `@apollo/gateway` é dependência do próprio router, e não desta biblioteca; um gateway mais antigo recusa o `@link` com `Invalid version ... for the federation feature` e a composição falha.
+
+O pin só vale para quem usa estes serviços: **todo subgraph atrás do router deve usar o `getMindFederationConfig()`**, inclusive o serviço que monta o `GraphQLModule` direto, com `autoSchemaFile: { federation: getMindFederationConfig() }`. Com `federation: 2`, o subgraph publica o padrão do `@nestjs/graphql` instalado, que no 14 importa também as diretivas que o `@apollo/gateway` não aplica e cuja versão acompanha a do `@nestjs/graphql`, e não a do gateway do router; um campo marcado com `@authenticated` comporia e seguiria aberto. Os specs da biblioteca conferem o decorator do `@link`, não o SDL publicado: para esse, consulte `{ _service { sdl } }` no serviço.
 
 **Serviços em TypeScript 5.9 precisam de um `paths` no `tsconfig.json`.** O ciclo de instalação desta
 biblioteca deixa uma segunda cópia do `@apollo/server` (e dos `@nestjs/*`) em
@@ -377,6 +366,8 @@ A biblioteca tem duas linhas mantidas em paralelo, e o serviço escolhe a sua pe
 
 Uma correção que valha para as duas linhas sai numa versão de cada uma. Uma major nova do Node pede uma major nova
 da biblioteca.
+
+Um subgraph na 2.x depende do router já atualizado: ver a regra de deploy em [GraphQL](#graphql).
 
 Não há publicação em registry. Liberar uma versão é:
 
