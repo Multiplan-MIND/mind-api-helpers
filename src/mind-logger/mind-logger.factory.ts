@@ -14,16 +14,19 @@ const formatMeta = (meta) => {
   return '';
 };
 
+// The trace and span ids go last and only when the call ran inside a span, so the fields before them keep their
+// positions.
 const mtsLoggerFormat = format.printf(({ context, level, message, timestamp, ms, ...meta }) => {
+  const spanIds = context?.traceId ? ` | trace_id=${context.traceId} span_id=${context.spanId}` : '';
   return `${timestamp} [${context?.module || context}][${level}][${context?.prefix || ''}] ${message} | ${
     meta && formatMeta(meta)
-  } | ${ms}`;
+  } | ${ms}${spanIds}`;
 });
 
 export const MindLoggerFactory = (module: string): LoggerService => {
   const timestamp = format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' });
-  // Só NODE_ENV === 'production' desliga cor e arquivo: lá o stdout vai para o coletor de log, que não deve
-  // receber códigos ANSI, e o arquivo só ocuparia o disco. Qualquer outro valor (ou ausente) mantém os dois.
+  // Only NODE_ENV === 'production' turns colour and the file off: there stdout goes to the log collector, which must
+  // not receive ANSI codes, and the file would only fill the disk. Any other value (or none) keeps both.
   const isProduction = process.env.NODE_ENV === 'production';
   const colorize = isProduction ? [] : [format.colorize()];
   const consoleFormat = format.combine(timestamp, format.ms(), ...colorize, format.prettyPrint(), mtsLoggerFormat);
