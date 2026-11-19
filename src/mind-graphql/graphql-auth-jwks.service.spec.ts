@@ -9,7 +9,7 @@ import { getMindFederationConfig } from './graphql-federation.config';
 import {
   EMPTY_IDENTITY,
   LoggerMock,
-  NEST_10_FEDERATION_LINK,
+  MIND_FEDERATION_LINK,
   UNAUTHENTICATED,
   createLoggerMock,
   federationLinkOf,
@@ -264,10 +264,10 @@ describe('GraphqlAuthJwksService', () => {
       expect(options.context).toEqual(expect.any(Function));
     });
 
-    it('should declare the NestJS 10 federation link (v2.3, 11 directives) in the generated subgraph SDL', async () => {
+    it('should declare the federation v2.14 link (13 directives) in the generated subgraph SDL', async () => {
       const options = await service.createGqlOptions();
 
-      expect(federationLinkOf(options)).toBe(NEST_10_FEDERATION_LINK);
+      expect(federationLinkOf(options)).toBe(MIND_FEDERATION_LINK);
     });
 
     it('should use a path that Express 5 (path-to-regexp 8) accepts and that matches any prefix', async () => {

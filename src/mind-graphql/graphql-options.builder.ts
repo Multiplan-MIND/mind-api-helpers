@@ -13,7 +13,7 @@ type MindGqlOptionsInput = {
 export function buildMindGqlOptions({ path, context }: MindGqlOptionsInput): ApolloFederationDriverConfig {
   return {
     ...(path && { path }),
-    /** Federation link pinned to v2.3 so mind-api-router (@apollo/gateway 2.4.x) can compose the subgraph */
+    /** Federation link pinned to the version and directives mind-api-router (@apollo/gateway) composes */
     autoSchemaFile: { path: 'schema.gql', federation: getMindFederationConfig() },
     sortSchema: true,
     playground: false,
